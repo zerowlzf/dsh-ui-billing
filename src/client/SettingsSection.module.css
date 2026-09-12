@@ -1,0 +1,227 @@
+/* Billing settings page: an intro line, the read-only balance card, then one
+   card per configured provider. A card is closed by default and summarises the
+   models its rates apply to; the price fields appear behind its edit control.
+   Tokens match the shipped settings pages (secondary text tier, alias borders
+   and surfaces). */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.intro {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.sectionTitle {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.rates {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-surface, transparent);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.cardTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cardTitle svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* Closed-card summary: how many models these rates cover, and how many of them
+   already carry a price. */
+.cardMeta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-weight: 400;
+}
+
+.pricedBadge {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.cardValue {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The right side of a card head: the figure it reports and the control that
+   acts on it, held together so the title stays on the left. */
+.cardEnd {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+/* The open card's model list; the closed card carries only its header. */
+.models {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.modelName {
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* One price window's three fields. A route may publish one price or two, so
+   both windows are always offered and the off-peak placeholders say what an
+   empty band means: the same figure as the peak one. */
+.band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* A route its provider prices at one figure: the three fields and the control
+   that asks for a second band, which then renders as the two labelled bands a
+   provider billing by window carries. */
+.singleBand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.bandLabel {
+  box-sizing: border-box;
+  min-width: 60px;
+  padding-bottom: 5px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 92px;
+  padding: 4px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--dsw-alias-border-l1);
+}
+
+.input:disabled {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.addRow .input {
+  width: 220px;
+}
+
+.note {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.warn {
+  color: var(--dsw-alias-label-warning, var(--dsw-alias-label-secondary));
+}
+
+.empty {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
