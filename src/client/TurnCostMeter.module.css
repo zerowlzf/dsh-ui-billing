@@ -1,0 +1,60 @@
+/* Turn-cost pill inside a completed turn's action row, after the shipped
+   Turn-usage and Turn-time pills. The pill reuses their geometry so the three
+   read as one cluster; the dialog wears the shared stat-dialog.module.css skin.
+   The row's gap and the cluster's own rebate space it, so this module carries
+   no margins of its own. */
+
+.root {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+  padding: 6px 8px;
+  border: none;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-variant-numeric: tabular-nums;
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.trigger svg {
+  width: calc(15px + var(--dsh-content-font-delta, 0px));
+  height: calc(15px + var(--dsh-content-font-delta, 0px));
+  flex: none;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Narrow viewport: the pill collapses to its bare icon with the sibling
+   action geometry; the dialog keeps the words. */
+@media (max-width: 480px) {
+  .trigger {
+    justify-content: center;
+    width: calc(28px + var(--dsh-content-font-delta, 0px));
+    padding: 6px;
+  }
+
+  .trigger .label {
+    display: none;
+  }
+}

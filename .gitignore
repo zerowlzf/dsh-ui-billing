@@ -1,0 +1,9 @@
+# Build output and installed dependencies; the checkout owns both.
+lib/
+node_modules/
+coverage/
+
+# Editor and OS residue.
+.DS_Store
+Thumbs.db
+*.log

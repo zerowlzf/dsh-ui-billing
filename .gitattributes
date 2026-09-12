@@ -1,0 +1,4 @@
+# This repository holds the plugin's canonical text form: LF, at checkout too,
+# so a `sync.mjs --check` comparison between it and a DSH checkout sees one form
+# on every host (that checkout enforces the same policy).
+* text=auto eol=lf

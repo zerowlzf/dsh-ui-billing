@@ -1,0 +1,67 @@
+/* Billing figures inside the shipped composer stats row, wearing the same
+   13/20 tertiary tier as the pills beside them. The row owns placement and
+   wrapping; this module owns only the pills' own skin, so a contribution cannot
+   move the row it joined.
+
+   The row spaces every child with its own 12px gap, so these two figures use
+   that same gap between themselves: one rhythm across the whole line. Their
+   meaning rides the icons and each figure's accessible name and hover title
+   rather than a word, which keeps the pair narrow — the row is width-bound, and
+   at the 680px clamp its content box holds 616px. */
+
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Dialog anchor: shrink-wraps its pill so the panel clamp measures the pill. */
+.anchor {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 1px 8px;
+  border: none;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pill svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.pill:hover,
+.pill[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Token count trailing one route name inside the cost dialog. */
+.tokens {
+  margin-left: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
