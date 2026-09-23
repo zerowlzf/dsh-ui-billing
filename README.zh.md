@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包按用户自有的单价，为一次 Web 会话计价。它的 Host 半边拥有 `ui-billing` settings 命名空间，并在其中缓存两项来自提供方的读取：DeepSeek 账户余额与公布的价目表。浏览器半边渲染 composer 下方的两个费用数字、每个已完成轮次那一行的费用胶囊，以及用于编辑单价的「计费」设置页。一条路由就是一对 `provider/model`，按「元 / 百万 tokens」在一个或两个每日时段内计费——缓存命中输入、未命中输入、输出——分别按高峰单价与公布的空闲一档。余额始终是 DeepSeek 账户的余额。
+本包按用户自有的单价，为一次 Web 会话计价。它的 Host 半边把 `ui-billing` 这些字段声明为自己配置里的活字段，并在其中缓存两项来自提供方的读取：DeepSeek 账户余额与公布的价目表。浏览器半边渲染 composer 环境 dock 里的两个费用数字、每个已完成轮次 tail 里的费用胶囊，以及 Plugins 页上用于编辑单价的「计费」配置页。一条路由就是一对 `provider/model`，按「元 / 百万 tokens」在一个或两个每日时段内计费——缓存命中输入、未命中输入、输出——分别按高峰单价与公布的空闲一档。余额始终是 DeepSeek 账户的余额。
 
 ## 目录
 
@@ -39,7 +39,7 @@ kind: "package-reference"
 
 单价的币种与余额一致，单位为百万 tokens。只有官方 DeepSeek 提供方按时段计价，也只有它的卡片给出第二组字段：高峰一组是这条路由自己的价，空闲一组是它在高峰时段之外的价。其它提供方的卡片只给一组三个字段，因为只公布一个价格的提供方全天同价；这类路由也可以按需加上第二档（「加入空闲时段」）：schema、费用折算与 settings 文档本来就为每条路由都带着第二档，已经存有第二档的路由会直接显示两档。DeepSeek 公布的时段是北京时间周一至周五 9:00–12:00、14:00–18:00，时段外为半价，因此官方卡片会在字段上方说明当前生效的是哪一档。
 
-官方 DeepSeek 提供方的路由自带公布价默认值，因此官方会话开箱即可读出费用：该路由上存过的一行会覆盖一切公布价，走默认值的行会把公布数字显示为输入框的占位符并带一个「默认单价」标记，清除该行即回到公布价。其余没有存量单价的路由不进入任何合计：胶囊显示短横线，对话框点名该路由，而不是显示一个当前配置无法支撑的数字。单价存放在命名空间的 `models` 记录中，键为 `provider/model`，因此手工编辑 settings 文档与页面操作是同一份存储。
+官方 DeepSeek 提供方的路由自带公布价默认值，因此官方会话开箱即可读出费用：该路由上存过的一行会覆盖一切公布价，走默认值的行会把公布数字显示为输入框的占位符并带一个「默认单价」标记，清除该行即回到公布价。其余没有存量单价的路由不进入任何合计：胶囊显示短横线，对话框点名该路由，而不是显示一个当前配置无法支撑的数字。单价存放在插件配置的 `models` 记录中，键为 `provider/model`，因此手工编辑 Profile patch 与页面操作是同一份存储。
 
 Host 会按 `pricingUrl`（默认是官方中文文档页）读取公布价，取页面走的是本部署自己的网页读取能力（`ctx.web`），而不是本包自己发起的请求；没有挂载该能力的部署会记为「没有可读的页面」。公布价很少变动，因此自动读取的间隔很长——默认十五天（`pricingRefreshIntervalMs`；`0` 表示只在启动时读一次、之后不再排期）——而且启动时若存量表格仍在间隔之内就只等待、不再读一次，这正是「重启不产生请求」的原因。页面上的「立即读取」控件随时可以要求读一次，承载这个请求的是 settings 文档：浏览器写入 `officialRequest`，Host 读到后去取页面，并在该次读取结算时清掉这个字段，卡片在此之前一直显示读取中。DeepSeek 没有价格接口——它的 API 提供补全、文件、一份只有 id 的模型列表和余额——因此那张页面表格是价格唯一可机读的表述。读到的表格无法识别、或它陈述的币种与 `currency` 不一致时，都会记成结构化失败：出厂快照继续给官方路由计价，计费页说明发生了什么。
 
@@ -49,15 +49,15 @@ Host 会按 `pricingUrl`（默认是官方中文文档页）读取公布价，�
 
 ### 费用显示
 
-composer 行把本会话费用与余额放进官方轮次/步数胶囊与 token 胶囊自己那一行：`conversation.composer.stats` 是 ui-chat 统计行亲自渲染的一个洞，因此这些数字就是那一行自己的 flex 子项，与官方那组共享同一份居中与同一个 12px 间距，而不是落在它旁边。那一行是**宽度受限**的——680px 封顶时内容盒只有 616px，其中官方两个胶囊、行内三个间距与两个数字合计约占 560px——因此两个数字都是纯金额（`¥16.82` 与 `¥15.96`，用金币与钱包字形区分；算不出时就是一个裸的 `-`）；它们靠无障碍名与 hover 提示说明自己是什么，而不是靠可见文字。会话合计累积 `tokenUsage` 投影——整份持久日志，而不是已加载窗口——按运行总量每次增长时生效的路由计价，这正是让会话中途换模型能被正确切分的原因。
+composer 的环境 dock 承载本会话费用与余额两个数字：`conversation.composer.dock` 是 ui-conversation 声明的、composer 卡片下方环境条目的 list，官方统计行本身就是其中一个条目，因此这两个数字作为**另一个条目**与它并列，而不是插进它内部。两个数字都是纯金额（`¥16.82` 与 `¥15.96`，用金币与钱包字形区分；算不出时就是一个裸的 `-`）；它们靠无障碍名与 hover 提示说明自己是什么，而不是靠可见文字。会话合计累积 `tokenUsage` 投影——整份持久日志，而不是已加载窗口——按运行总量每次增长时生效的路由计价，这正是让会话中途换模型能被正确切分的原因。
 
-每个已完成的轮次在它自己的操作条里带上费用胶囊，位置在官方「用量」「用时」之后、消息时间之前，经由 `conversation.chat.turn-stats` 这个洞。它显示 `费用 ¥0.42`，点开是该轮次的明细：一行一条路由，总额取自该轮次的持久账目，归属则来自每条已加载尝试**实际被计费的那条路由**。同时产出了文件改动的轮次两行都在：文件行属于操作条上方的 tail 链，费用属于操作条内部的洞，彼此不抢占。有三种情况不带数字，对话框会说明是哪一种：
+每个已完成的轮次在它自己的 tail 里带上费用胶囊，经由 `conversation.chat.turnTail`——ui-chat 声明的、位于该轮次操作条**之前**的特性贡献 list，它的拥有者份额正是该轮次、收尾序号与文件打开器。它显示 `费用 ¥0.42`，点开是该轮次的明细：一行一条路由，总额取自该轮次的持久账目，归属则来自每条已加载尝试**实际被计费的那条路由**。同时产出了文件改动的轮次两个 tail 条目都在——官方文件行与这个数字——因为 tail 是 list，彼此不抢占。有三种情况不带数字，对话框会说明是哪一种：
 
 - 该轮次自身的账目缺失（事件已被分页移出、某次尝试从未结算）——与它自己那个「用量」胶囊的取舍完全一致：会话合计是整场会话的数，绝不拿来顶替某一轮；
 - 账目点了多条路由，而这些尝试一条都不在已加载窗口里，拆分无从谈起；对话框会点名这些无法归属的路由，而不是把整份合计在每条路由上各记一遍；
 - 它跑过的某条路由没有配单价，对话框会把它标为未定价。
 
-被中断的轮次同样保留这一行：没有收尾消息就没有可复制、可分支的目标，但账目与费用胶囊正是这一行存在的理由。尚未结束的轮次根本没有这一行——官方的收尾节点在该轮次结束时才出现——因此最新一条回答要等那一轮结算后才带上费用。
+被中断的轮次同样保留它的 tail：没有收尾消息就没有可复制、可分支的目标，但账目与费用胶囊正是这个 tail 存在的理由。尚未结束的轮次根本没有 tail——官方的收尾节点在该轮次结束时才出现——因此最新一条回答要等那一轮结算后才带上费用。
 
 这里不发起任何模型请求，也不写入任何会话事件：胶囊只是对提供方已经上报的用量做只读投影。
 
@@ -69,7 +69,9 @@ composer 行把本会话费用与余额放进官方轮次/步数胶囊与 token 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-### settings 命名空间
+### 活配置字段
+
+这些取值就是本插件自己的配置：以 `Config` 里的活字段声明，存放在 Profile 的插件配置中，条目 id 是 `ui-billing`——也就是 web 组合声明的那个行 id。正因同名，迁移到 Profile 配置之前写在 `settings.yaml` 里的内容会被导入到这些字段，而不是丢掉。
 
 `ui-billing` 保存一个值：
 
@@ -113,11 +115,11 @@ officialRequest: null
 
 ### 注册
 
-三个界面，卸载时各自还原：`settings.section`（计费页）、`conversation.composer.stats`（官方 composer 统计行内部的两个数字），以及 `conversation.chat.turn-stats`（已完成轮次自己的操作条里的每轮费用胶囊）。两个数字洞都是由宿主行亲自渲染的 list 槽；行的拥有者事实以**摊平**方式到达条目，因此轮次胶囊直接读 `turn`，与官方交付文件条目直接读 `openFile` 是同一种读法。组件一律按槽的**四份份额**声明 props——`PropsRuntime`（拥有者份额与会话座位）、本插件面的 `InjectFace`、以及 `PropsLocale`——绝不手写成员清单。
+三个界面，卸载时各自还原：`plugins.row.config`（计费配置页，键为 `@deepseek-ai/dsh-client-ui-billing#ui-billing`——本包在 Plugins 页上自己那一行的配置）、`conversation.composer.dock`（composer 环境 dock 里的本会话费用与余额两个数字），以及 `conversation.chat.turnTail`（已完成轮次 tail 里的每轮费用胶囊）。该页正是配置契约里的「自定义页」情形：Plugins 页拥有该行条目的 form 并交给页面，因此页面把编辑暂存、由一次保存通过 `form.mutate` 写出全部改动；而单价那些行——一张以「路由 × 价格时段」为键的映射、每格一个字段——仍由本包自绘控件承载，这是共享的标量字段套件表达不了的。两个数字座位都是各自所属包声明的 list 槽；拥有者份额以**摊平**方式到达条目，因此轮次胶囊直接读 `turn`，与官方交付文件条目是同一种读法。组件一律按槽的各份份额声明 props——`PropsRuntime`（拥有者份额与会话座位）、本插件面的 `InjectFace`、以及 `PropsLocale`——绝不手写成员清单。
 
 计费页为「用户层确实配置过」「适配器当前已注册」或「部署层 profile 里带模型」（官方提供方就是这一类）的提供方各给一张卡片；三者都不占的目录条目没有可定价的东西，就不列出。每张卡片的模型来自那份 profile，模型列表收在该卡片自己的编辑控件之后；任何被某条已存单价行或本页刚输入的路由点名的提供方同样保留卡片，因此提供方消失的路由仍然可编辑、可清除。
 
-所有 ctx 读取都归 apply 闭包：组件拿到的是命名空间快照的 `useBilling` 选择器钩子、已加载提供方分组的 `useBillingGroups` 钩子，以及 `routeGroups`、`saveRate`、`clearRate` 三个普通回调。目录自身的失效信号（`llm/adapters-updated`、`connection/reset`）在插件里订阅，分组列表是一个可观察 store；因此组件既不持有任何订阅装置，也不会去够 ctx。
+所有 ctx 读取都归 apply 闭包，且每个界面拿到的那份面只带它自己绑定的东西：两个药丸拿条目 form 快照的 `useBilling` 选择器钩子；配置页拿已加载提供方分组的 `useBillingGroups` 钩子与 `routeGroups` 这个普通加载回调。配置页不通过这份面写任何东西——它的单价走 Plugins 页交给它的那份 form。目录自身的失效信号（`llm/adapters-updated`、`connection/reset`）在插件里订阅，分组列表是一个可观察 store；因此组件既不持有任何订阅装置，也不会去够 ctx。
 
 </details>
 
@@ -129,9 +131,11 @@ officialRequest: null
 当这些显示不够用时，读这些页面。它们从浏览器界面走向它所读取的测量与 settings 传输。
 
 - [dsh-token-meter](../../llm/token-meter/README.zh.md) — 本包所累积的 `tokenUsage` 投影。
-- [dsh-settings](../../settings/settings/README.zh.md) — Host 半边注册、浏览器半边编辑的命名空间 seam。
+- [dsh-settings](../../settings/settings/README.zh.md) — Host 半边写入、页面所有者再转交给页面的配置服务。
 - [dsh-web](../../web/web/README.zh.md) — Host 读取公布价页面所用的网页读取能力。
-- [ui-settings](../ui-settings/README.zh.md) — 设置外壳，以及本页绑定的命名空间 scope。
+- [ui-settings](../ui-settings/README.zh.md) — 页面所有者据以读取条目的共享配置 form。
+- [ui-plugin-manager](../ui-plugin-manager/README.zh.md) — Plugins 页：本包页面注册进它的 `plugins.row.config` 槽，并遵循它的自定义页契约。
+- [ui-primitives](../ui-primitives/README.zh.md) — 页面用于承载自绘控件的共享设置表单外框。
 - [ui-chat](../ui-chat/README.zh.md) — 本包所扩展的胶囊、对话框与 turn-tail 链。
 
 -----
@@ -170,14 +174,14 @@ These limits define the current cost display. They are current package constrain
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-- The per-turn node data lives only in the materialized Chat node store, not in the legacy compatibility slice the shipped stats row reads.
-- ui-chat's completed-Turn extension above the action row is a chain that elects one entry, so a contribution there is dropped for every Turn the shipped produced-files entry claims; the cost figure lives in the row's own list hole (`conversation.chat.turn-stats`) instead. The per-attempt node kind is `assistant-step`, and its `finalNode.provenance` and `finalNode.time` are the route and the moment that attempt was billed on.
+- 每轮节点数据只存在于已物化的 Chat 节点 store 里，而不在官方统计行读取的那份 legacy 兼容切片里。
+- 费用数字是一个 tail 贡献（`conversation.chat.turnTail`）——ui-chat 声明的、位于已完成轮次操作条**之前**的特性贡献 list；正是「list」这一点保住了它：官方交付文件条目与这个数字能在同一轮次共存。每条尝试的节点 kind 是 `assistant-step`，其 `finalNode.provenance` 与 `finalNode.time` 就是该次尝试被计费的路由与时刻。
 - 价格表夹具就是线上文档页实际提供的那张表格，逐字录下，因此 `parsePricePage` 是针对它真正会遇到的行合并、脚注标记与单位后缀来规定的。默认用中文版，因为它陈述的币种就是本包默认币种；英文版在样张里充当「币种不符被拒」的用例。
 - `BillingTranslate` 保持本地声明，而 props 从 `PropsLocale` 派生：框架在合并后的 `LocaleNamespaceMap` 上给出的座位同时接受本字典的键与共享的通用键，它可以赋给更窄的本地别名，反向则不行。一包两 face 的布局让 `src/settings.ts` 在两个 leaf 中都参与编译——Client leaf 把它列进 `include`——因为 Client 配置不允许进入 split 项目的 Host leaf。
-- settings 命名空间（`ui-billing`）与文案字典（`billing`）分开命名：两者共用一个标识符会把 scope 绑到字典上，于是 Host 明明在提供正确取值，而每个界面都渲染自己的「不可用」状态。
+- 配置条目（`ui-billing`）与文案字典（`billing`）分开命名：两者共用一个标识符会把 scope 绑到字典上，于是 Host 明明在提供正确取值，而每个界面都渲染自己的「不可用」状态。
 - 本包处在逐文件 100% 覆盖率门内，只有一条分支带 `/* v8 ignore */`：轮次折叠里「最后一行存在」的判空——上面的循环为每条尝试都加了一行，而没有尝试的轮次在到达该处之前就已返回。发布标签要等这道门与 `pnpm run doc-sync` 一起转绿；两次发布之间，一次改动只需过包内样张、两个 TypeScript face 与 linter——把注意力花在审查上，比追最后几个百分点更值。
 - 页面要求的这次读取走 settings 写入，而不是调进 Host：浏览器自己读不了那张文档页（该来源不为它下发许可），本包也没有可调用的 Remote 命名空间，于是命名空间里的 `officialRequest` 字段就是两端共用的那条通道。客户端写下它请求的时刻，Host 监听命名空间、去取页面，并在该次读取结算时清掉字段。这个字段「不存在」与「为 null」对每个读取方都是同一件事，因为命名空间 schema 里的联合类型两者都不会写进存量文档。
 
 </details>
 
-**Runtime invariant:** No companion is published. The package's two halves own no shared in-process state: the Host half owns the settings namespace registration and its refresh chain, and the browser half owns three slot registrations, each proven removed by the HMR-safety spec.
+**Runtime invariant:** No companion is published. The package's two halves own no shared in-process state: the Host half owns the live field declarations and its refresh chain, and the browser half owns three slot registrations, each proven removed by the HMR-safety spec.

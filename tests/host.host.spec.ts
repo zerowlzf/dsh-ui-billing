@@ -8,13 +8,11 @@
  * previous value, that activation waits for the store, and that disposal stops
  * the chains.
  */
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
+import type { Volatile, VolatileSnapshot } from '@deepseek-ai/cordis'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
-import { SettingsProvider } from '@deepseek-ai/dsh-settings'
-import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { WebRuntime } from '@deepseek-ai/dsh-web'
 import type { WebFetchProvider, WebFetchRequest, WebFetchResult } from '@deepseek-ai/dsh-web'
-import Schema from '@deepseek-ai/schemastery'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCredentials } from '../../../credentials/credentials/tests/memory.ts'
 import { DEFAULT_BASE_URL, readBalance } from '../src/account.ts'
@@ -22,40 +20,71 @@ import { Config } from '../src/index.ts'
 import { apply, inject } from '../src/index.ts'
 import { DEFAULT_PRICING_URL } from '../src/published-prices.ts'
 import { DEFAULT_CURRENCY, NS } from '../src/settings.ts'
+import type {
+  BalanceSnapshot, ModelRate, PriceFailure, PriceSnapshot, ReadFailure,
+} from '../src/settings.ts'
 import { PRICING_EN_HTML, PRICING_ZH_HTML } from './price-page-fixture.ts'
 
 /**
  * In-memory settings provider: the smallest real subclass of the Service
  * Definition, standing in for the file-backed provider a deployment mounts.
  */
-class MemorySettings extends SettingsProvider {
-  /** Raw document the provider's storage currently holds. */
-  doc: Record<string, unknown>
-  /** Every persist() call observed, in order. */
-  readonly persisted: Array<{ ns: SettingsNamespace; section: Record<string, unknown> }> = []
-  private readonly writableFlag: boolean
+/**
+ * In-memory configuration form service: the smallest stand-in for the Host
+ * service this half writes through, standing in for the Profile-backed editor a
+ * deployment mounts. It accepts only the calls this half makes, so a write the
+ * plugin performs is a write the test sees.
+ */
+class MemorySettings extends Service {
+  /** Per-entry documents the editor currently holds. */
+  doc: Record<string, Record<string, unknown>> = {}
+  /** Every write observed, in order. */
+  readonly persisted: Array<{ ns: string; section: Record<string, unknown> }> = []
+  /** Whether the editor accepts writes at all. */
+  private readonly accept: boolean
 
   constructor(
-    ctx: ConstructorParameters<typeof SettingsProvider>[0],
-    options: { doc?: Record<string, unknown>; writable?: boolean } = {},
+    ctx: ConstructorParameters<typeof Service>[0],
+    options: { doc?: Record<string, unknown>; accept?: boolean } = {},
   ) {
-    super(ctx)
-    this.doc = structuredClone(options.doc ?? {})
-    this.writableFlag = options.writable ?? true
+    super(ctx, 'settings')
+    const entry = options.doc?.[NS]
+    this.doc = entry === undefined ? {} : { [NS]: structuredClone(entry) as Record<string, unknown> }
+    this.accept = options.accept ?? true
   }
 
-  get writable(): boolean {
-    return this.writableFlag
+  /** Merge a patch into one entry, as a form save applies it. */
+  async update(ns: string, patch: object): Promise<void> {
+    if (!this.accept) throw new Error('the profile does not accept writes')
+    const section = structuredClone(patch) as Record<string, unknown>
+    this.persisted.push({ ns, section })
+    this.doc[ns] = { ...this.doc[ns], ...section }
   }
 
-  protected load(): Promise<Record<string, unknown>> {
-    return Promise.resolve(structuredClone(this.doc))
+  /** Apply ordered field edits to one entry. */
+  async mutate(ns: string, ops: readonly { op: string; path: readonly string[]; value?: unknown }[]): Promise<void> {
+    let section: Record<string, unknown> = { ...this.doc[ns] }
+    for (const op of ops) {
+      const key = op.path[0] ?? ''
+      // An unset drops the key by rebuilding the entry without it: the key is
+      // computed, so a delete would not be a static one.
+      if (op.op === 'unset') {
+        section = Object.fromEntries(Object.entries(section).filter(([name]) => name !== key))
+        continue
+      }
+      section[key] = op.value
+    }
+    await this.update(ns, section)
   }
 
-  protected persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
-    this.persisted.push({ ns, section: structuredClone(section) })
-    this.doc[ns] = structuredClone(section)
-    return Promise.resolve()
+  /** Report the entries this editor serves. */
+  describe(): Array<{ ns: string; revision: number }> {
+    return Object.keys(this.doc).map(ns => ({ ns, revision: 0 }))
+  }
+
+  /** Page presentations are this half's to turn off; the stub records nothing. */
+  configure(): () => void {
+    return () => {}
   }
 }
 
@@ -147,7 +176,7 @@ function mountWeb(ctx: Context, fetchPage: WebFetchProvider['fetch']): void {
  */
 async function mountSettings(
   ctx: Context,
-  options: { doc?: Record<string, unknown>; writable?: boolean } = {},
+  options: { doc?: Record<string, unknown>; accept?: boolean } = {},
 ): Promise<MemorySettings> {
   await ctx.plugin(MemorySettings, options)
   const provider = ctx.get('settings') as MemorySettings | undefined
@@ -155,24 +184,52 @@ async function mountSettings(
   return provider
 }
 
+/** One live field as the loader resolves it: a stable reference read on demand. */
+function live<T>(value: T): Volatile<T> {
+  return { get: () => value } as Volatile<T>
+}
+
 /** Values the Loader resolves from the plugin's own `Config` schema. */
-const RESOLVED_CONFIG = {
+const RESOLVED_CONFIG: Config = {
   apiKeyEnv: 'DEEPSEEK_API_KEY',
   baseURL: DEFAULT_BASE_URL,
-  currency: DEFAULT_CURRENCY,
   refreshIntervalMs: 0,
   pricingUrl: DEFAULT_PRICING_URL,
   pricingRefreshIntervalMs: 0,
   requestTimeoutMs: 15_000,
-} satisfies Config
+  currency: live(DEFAULT_CURRENCY),
+  models: live<Record<string, ModelRate>>({}),
+  cache: live<BalanceSnapshot | null>(null),
+  cacheError: live<ReadFailure | null>(null),
+  official: live<PriceSnapshot | null>(null),
+  officialError: live<PriceFailure | null>(null),
+  officialRequest: live<number | null>(null),
+}
+
+/** A live field the test can move: the reference the loader hands the plugin, plus the write a save performs. */
+interface Cell<T> extends Volatile<T> {
+  /** @param value - value the field holds from here on. */
+  set(value: T): void
+}
 
 /**
- * Mount the Host half over the in-memory provider, beside the web capability a
- * deployment mounts.
+ * Build one live field.
+ * @param value - value the field starts from.
+ * @returns the readable reference and its setter.
+ */
+function cell<T>(value: T): Cell<T> {
+  let current = value
+  return { get: () => current as VolatileSnapshot<T>, set: (next) => { current = next } }
+}
+
+/**
+ * Mount the Host half over the in-memory configuration form, beside the web
+ * capability a deployment mounts.
  * @param config - plugin configuration overrides.
  * @param answers - what each read answers, and whether a web capability exists.
- * @param stored - the settings document the provider starts from.
- * @returns the context, the provider holding the writes, both read stubs, and the plugin fiber.
+ * @param stored - the entry the form starts from, as the Profile held it.
+ * @returns the context, the form holding the writes, both read stubs, the
+ * plugin fiber, and a save that applies one form write the way the loader does.
  */
 async function mount(
   config: Partial<Config> = {},
@@ -181,9 +238,10 @@ async function mount(
 ): Promise<{
   ctx: Context
   settings: MemorySettings
-  fiber: { dispose: () => Promise<void> }
+  fiber: { dispose: () => Promise<void>; ctx: Context }
   fetchImpl: ReturnType<typeof stubReads>['fetchImpl']
   page: ReturnType<typeof stubReads>['page']
+  save: (patch: Record<string, unknown>) => void
 }> {
   const ctx = new Context()
   // The real timer service mixes `timeout` onto the context, which is the API
@@ -193,34 +251,80 @@ async function mount(
   new MemoryCredentials(ctx, { DEEPSEEK_API_KEY: 'key-under-test' })
   const { fetchImpl, page } = stubReads(answers)
   if (answers.web !== false) mountWeb(ctx, page)
-  const fiber = ctx.plugin({ inject, apply }, { ...RESOLVED_CONFIG, ...config })
+  // The live fields are the references the loader hands the plugin, seeded from
+  // the entry the form starts from — the way a Profile that already holds a
+  // table reaches a plugin that is activating.
+  const cells = {
+    currency: cell(DEFAULT_CURRENCY) as Cell<string>,
+    models: cell<Record<string, ModelRate>>({}),
+    cache: cell<BalanceSnapshot | null>(null),
+    cacheError: cell<ReadFailure | null>(null),
+    official: cell<PriceSnapshot | null>(null),
+    officialError: cell<PriceFailure | null>(null),
+    officialRequest: cell<number | null>(null),
+  }
+  const entry = (stored[NS] ?? {}) as Record<string, unknown>
+  for (const key of Object.keys(cells) as Array<keyof typeof cells>) {
+    if (key in entry) (cells[key] as Cell<unknown>).set(entry[key])
+  }
+  const fiber = ctx.plugin({ inject, apply }, { ...RESOLVED_CONFIG, ...cells, ...config })
   cleanups.push(async () => { await fiber.dispose() })
   await fiber
-  return { ctx, settings, fiber, fetchImpl, page }
+  /**
+   * Apply one form write: replace the resolved live fields and notify the
+   * running instance, as the loader commits a volatile-only change.
+   * @param patch - field values the save lands.
+   */
+  const save = (patch: Record<string, unknown>): void => {
+    for (const [key, value] of Object.entries(patch)) {
+      const target = (cells as Record<string, Cell<unknown> | undefined>)[key]
+      if (target !== undefined) target.set(value)
+    }
+    fiber.ctx.emit('loader/volatile-update', Object.keys(patch).map(key => [key]))
+  }
+  return { ctx, settings, fiber, fetchImpl, page, save }
 }
 
 describe('configuration', () => {
   it('defaults every key the plugin reads', () => {
     // The empty object is what a deployment that sets nothing resolves from;
-    // the schema fills every key, which is the fact under test.
-    const resolved = new Schema(Config)({} as never)
-    expect(resolved).toEqual({
+    // the schema fills every key, which is the fact under test. Ordinary keys
+    // resolve to plain values and live ones to a reference read on demand.
+    const resolved = Config({} as never) as unknown as Config
+    expect({
+      apiKeyEnv: resolved.apiKeyEnv,
+      baseURL: resolved.baseURL,
+      refreshIntervalMs: resolved.refreshIntervalMs,
+      pricingUrl: resolved.pricingUrl,
+      pricingRefreshIntervalMs: resolved.pricingRefreshIntervalMs,
+      requestTimeoutMs: resolved.requestTimeoutMs,
+    }).toEqual({
       apiKeyEnv: 'DEEPSEEK_API_KEY',
       baseURL: DEFAULT_BASE_URL,
-      currency: DEFAULT_CURRENCY,
       refreshIntervalMs: 300_000,
       pricingUrl: DEFAULT_PRICING_URL,
       pricingRefreshIntervalMs: 15 * 86_400_000,
       requestTimeoutMs: 15_000,
     })
+    expect(resolved.currency.get() ?? DEFAULT_CURRENCY).toBe(DEFAULT_CURRENCY)
+    expect(resolved.models.get() ?? {}).toEqual({})
+    expect(resolved.cache.get() ?? null).toBeNull()
+    expect(resolved.cacheError.get() ?? null).toBeNull()
+    expect(resolved.official.get() ?? null).toBeNull()
+    expect(resolved.officialError.get() ?? null).toBeNull()
+    expect(resolved.officialRequest.get() ?? null).toBeNull()
   })
 })
 
 describe('namespace ownership', () => {
-  it('registers the ui-billing namespace and caches both reads', async () => {
-    const { ctx, settings, fetchImpl, page } = await mount()
+  it('declares the live fields and caches both reads', async () => {
+    const { settings, fetchImpl, page } = await mount()
 
-    expect(ctx.settings.describe({ redactSecrets: true }).map(view => view.ns)).toContain(NS)
+    // The live fields are this plugin's own Config: no namespace is registered
+    // anywhere else, and the entry the browser edits is the one declared here.
+    expect(Object.keys(Config.dict ?? {})).toEqual(expect.arrayContaining([
+      'currency', 'models', 'cache', 'cacheError', 'official', 'officialError', 'officialRequest',
+    ]))
     // The balance is this package's own request; the page goes through the web
     // capability, so no page request appears on the global fetch.
     expect(fetchImpl.mock.calls.map(call => call[0])).toEqual([`${DEFAULT_BASE_URL}/user/balance`])
@@ -358,7 +462,7 @@ describe('namespace ownership', () => {
     const { page } = stubReads()
     const ctx = new Context()
     await ctx.plugin(Timer)
-    const readOnly = await mountSettings(ctx, { writable: false })
+    const readOnly = await mountSettings(ctx, { accept: false })
     new MemoryCredentials(ctx, { DEEPSEEK_API_KEY: 'key-under-test' })
     mountWeb(ctx, page)
     ctx.logger.warn = warn as never
@@ -396,12 +500,12 @@ describe('namespace ownership', () => {
   })
 
   it('reads the page when the browser asks for it, then clears the request', async () => {
-    const { ctx, settings, page } = await mount()
+    const { settings, page, save } = await mount()
     await vi.waitFor(() => { expect(page).toHaveBeenCalledTimes(1) })
 
-    // The page's request is a settings write: that document is the one store
-    // both halves share, and the Host watches it for exactly this.
-    await ctx.settings.mutate(NS, [{ op: 'set', path: ['officialRequest'], value: Date.now() }])
+    // The page's request is a form write: the live fields are the one store
+    // both halves share, and the Host watches them for exactly this.
+    save({ officialRequest: Date.now() })
     await vi.waitFor(() => { expect(page).toHaveBeenCalledTimes(2) })
     // It stays pending until its read settles, which is how the page shows that
     // read as in flight.
@@ -412,10 +516,10 @@ describe('namespace ownership', () => {
     // The reading is left unanswered, so the repeat lands while it is in
     // flight: the same request twice is not a second read.
     const reading = Promise.withResolvers<WebFetchResult>()
-    const { ctx, page } = await mount({}, { prices: () => reading.promise })
+    const { page, save } = await mount({}, { prices: () => reading.promise })
     const asked = Date.now()
-    await ctx.settings.mutate(NS, [{ op: 'set', path: ['officialRequest'], value: asked }])
-    await ctx.settings.mutate(NS, [{ op: 'set', path: ['officialRequest'], value: asked }])
+    save({ officialRequest: asked })
+    save({ officialRequest: asked })
     // The read start-up began, plus the one the request caused.
     await vi.waitFor(() => { expect(page).toHaveBeenCalledTimes(2) })
     reading.resolve(pageOf())

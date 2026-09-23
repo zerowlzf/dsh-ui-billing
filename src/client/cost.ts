@@ -18,8 +18,18 @@
  * @module @deepseek-ai/dsh-client-ui-billing/cost
  */
 
-import type { TurnTokenUsage } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { TurnTailChatData } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
+
+/**
+ * Exact provider-reported token accounting for every attempt in one completed
+ * Turn, as the Chat contract carries it on the tail node.
+ *
+ * Derived from the payload rather than imported, because the Chat package
+ * exports the tail payload but not the accounting type itself: this package
+ * reads the accounting the tail carries and never names a shape of its own.
+ */
+type TurnTokenUsage = NonNullable<TurnTailChatData['tokenUsage']>
 import { bandAt, bandFor, priceUsage, priceWindowAt, routeKey, type PriceWindow } from '../settings.ts'
 import type { ModelRate } from '../settings.ts'
 

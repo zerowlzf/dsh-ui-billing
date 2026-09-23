@@ -9,11 +9,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { screen, render, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
-import { makeTranslate, stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { makeTranslate, stubConfigForm, type StubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import type { BillingSettings, PriceSnapshot } from '../src/settings.ts'
 import { DEFAULT_CURRENCY } from '../src/settings.ts'
-import type { SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { OFFICIAL_RATES, defaultRateOf, effectiveRates } from '../src/client/official-rates.ts'
 import { SessionCostMeter } from '../src/client/CostMeter.tsx'
 import { en, zh } from '../src/client/locales.ts'
@@ -44,7 +44,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function snapshot(partial: Partial<SettingsScopeSnapshot<BillingSettings>> = {}): SettingsScopeSnapshot<BillingSettings> {
+function snapshot(partial: Partial<ConfigFormSnapshot<BillingSettings>> = {}): ConfigFormSnapshot<BillingSettings> {
   return {
     status: 'ready',
     value: {
@@ -81,13 +81,15 @@ function seats() {
     usePanelInfo: (() => undefined) as never,
     useResource: (() => undefined) as never,
     close: (() => {}) as never,
+    useSessionStatus: (() => undefined) as never,
+    useSessionRetainInfo: (() => undefined) as never,
   }
 }
 
 /** The plugin's injected face over one namespace stub. */
-function billingFace(stub: StubSettingsScope<BillingSettings>) {
+function billingFace(stub: StubConfigForm<BillingSettings>) {
   return {
-    useBilling: ((selector: (value: SettingsScopeSnapshot<BillingSettings>) => unknown) =>
+    useBilling: ((selector: (value: ConfigFormSnapshot<BillingSettings>) => unknown) =>
       selector(stub.scope.getSnapshot())) as never,
     useBillingGroups: (() => []) as never,
     saveRate: vi.fn(async () => {}),
@@ -99,7 +101,7 @@ function billingFace(stub: StubSettingsScope<BillingSettings>) {
 
 /** Render the session meter over one namespace value and one token total. */
 function renderSession(value: Partial<BillingSettings>, usage: TokenUsageProjection, model: string): void {
-  const stub = stubSettingsScope<BillingSettings>()
+  const stub = stubConfigForm<BillingSettings>()
   stub.publish(snapshot({
     value: {
       currency: 'CNY',

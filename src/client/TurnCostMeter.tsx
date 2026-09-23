@@ -1,6 +1,6 @@
-// Turn-cost pill inside a completed turn's own action row: the stat pill after
-// the shipped Turn-usage and Turn-time triggers, labelled with what the turn
-// cost and click-opening the per-route breakdown.
+// Turn-cost pill in a completed turn's tail: the feature contribution before
+// that turn's action row, labelled with what the turn cost and click-opening
+// the per-route breakdown.
 //
 // The turn's token accounting comes from the turn-tail payload, which is the
 // same evidence the Turn-usage dialog shows and the only per-turn total the
@@ -14,7 +14,7 @@ import { createPortal } from 'react-dom'
 import type { ChatConversationViewNode, TurnTailChatData } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { DEFAULT_CURRENCY, pricesByWindow, routeKey, type BillingSettings, type ModelRate } from '../settings.ts'
-import type { BillingInjected } from './face.ts'
+import type { BillingPillsInjected } from './face.ts'
 import { LOCALE_NS } from './locales.ts'
 import { effectiveRates } from './official-rates.ts'
 import { turnCost, turnRouteUsage, turnRoutes, type TurnAttempt, type TurnRouteUsage } from './cost.ts'
@@ -26,7 +26,7 @@ import css from './TurnCostMeter.module.css'
 import dialogCss from './stat-dialog.module.css'
 
 /**
- * Props of the per-Turn cost pill: the hole's runtime share (the completed
+ * Props of the per-Turn cost pill: the tail's runtime share (the completed
  * Turn's own `turn`, `seq`, and `openFile`, plus the session seats), the
  * plugin's injected face, and the pill's locale seat.
  *
@@ -35,8 +35,8 @@ import dialogCss from './stat-dialog.module.css'
  * this pill prices is `turn.turn`.
  */
 export type TurnCostMeterProps =
-  & PropsRuntime<'conversation.chat.turn-stats'>
-  & InjectFace<BillingInjected>
+  & PropsRuntime<'conversation.chat.turnTail'>
+  & InjectFace<BillingPillsInjected>
   & PropsLocale<typeof LOCALE_NS>
 
 /** Read one finite number out of a provider-reported usage payload. */

@@ -6,16 +6,36 @@
  * @module @deepseek-ai/dsh-client-ui-billing/face
  */
 
-import type { SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { BillingSettings } from '../settings.ts'
 import type { ProviderRouteGroup } from './routes.ts'
 
-/** The plugin's injected business face: reactive reads, the directory loader, and the writes. */
-export interface BillingInjected {
+/**
+ * The two cost pills' injected face: the read they bind.
+ *
+ * The pills show figures the Host already wrote into the entry, so they take
+ * nothing but that read. Keeping each surface's face to what it uses is what
+ * lets the page below declare no selector hook it never reads.
+ */
+export interface BillingPillsInjected {
   /** Reactive sources are bound by the renderer into `use<Name>` selector hooks. */
   hooks: {
-    /** The `ui-billing` namespace snapshot. */
-    billing: { getSnapshot: () => SettingsScopeSnapshot<BillingSettings>; subscribe: (fn: () => void) => () => void }
+    /** The `ui-billing` namespace form snapshot. */
+    billing: { getSnapshot: () => ConfigFormSnapshot<BillingSettings>; subscribe: (fn: () => void) => () => void }
+  }
+}
+
+/**
+ * The configuration page's injected face: the directory it lists.
+ *
+ * The rates are not this half's to write — the Plugins page owns the row
+ * entry's form and hands it to the page — so the page's face carries only the
+ * read the page cannot perform itself: the provider directory, which arrives
+ * over `ctx.remote.llm` inside the apply closure.
+ */
+export interface BillingPageInjected {
+  /** Reactive sources are bound by the renderer into `use<Name>` selector hooks. */
+  hooks: {
     /** The provider groups the plugin loaded. */
     billingGroups: {
       getSnapshot: () => readonly ProviderRouteGroup[]
@@ -27,30 +47,4 @@ export interface BillingInjected {
    * @returns settlement after the load publishes, whatever it found.
    */
   routeGroups: () => Promise<void>
-  /**
-   * Write one route's rates, or remove its stored row when nothing is left.
-   * @param route - the `provider/model` key to write.
-   * @param peak - typed peak-window values by field name, where an unparsable field is dropped from the write.
-   * @param offPeak - typed off-peak-window values by field name; all three empty clears the row's second band.
-   * @returns settlement after the namespace commits the change.
-   */
-  saveRate: (
-    route: string,
-    peak: Readonly<Record<string, string>>,
-    offPeak: Readonly<Record<string, string>>,
-  ) => Promise<void>
-  /**
-   * Remove one stored rate row.
-   * @param route - the `provider/model` key to clear.
-   * @returns settlement after the namespace commits the change.
-   */
-  clearRate: (route: string) => Promise<void>
-  /**
-   * Ask the Host to read the published price page now rather than at the next
-   * automatic read. The request is a settings write, so it settles when the
-   * document commits — not when the page has been read; the namespace's
-   * `officialRequest` field stays set until that read settles.
-   * @returns settlement after the namespace records the request.
-   */
-  refreshPrices: () => Promise<void>
 }

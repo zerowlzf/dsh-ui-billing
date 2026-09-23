@@ -143,24 +143,74 @@ export interface BalanceSnapshot {
  */
 export type ReadFailure =
   /** Nothing held a value for the referenced key. */
-  | { readonly kind: 'noKey'; readonly ref: string }
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'noKey'
+    /** Reference the store holds no value for. */
+    readonly ref: string
+  }
   /** The endpoint answered with a status other than 200. */
-  | { readonly kind: 'http'; readonly status: number }
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'http'
+    /** Status the endpoint answered with. */
+    readonly status: number
+  }
   /** The request itself did not complete. */
-  | { readonly kind: 'network'; readonly detail: string }
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'network'
+    /** Transport detail a person cannot translate. */
+    readonly detail: string
+  }
   /** The response arrived but could not be read as the documented payload. */
-  | { readonly kind: 'payload'; readonly detail: string }
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'payload'
+    /** Parser detail a person cannot translate. */
+    readonly detail: string
+  }
 
 /** Why the balance read produced no snapshot. */
 export type BalanceFailure = ReadFailure
 
 /** Why the price read produced no usable table; a price page needs no key. */
 export type PriceFailure =
-  | Exclude<ReadFailure, { readonly kind: 'noKey' }>
+  /** The endpoint answered with a status other than 200. */
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'http'
+    /** Status the endpoint answered with. */
+    readonly status: number
+  }
+  /** The request itself did not complete. */
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'network'
+    /** Transport detail a person cannot translate. */
+    readonly detail: string
+  }
+  /** The response arrived but could not be read as the documented payload. */
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'payload'
+    /** Parser detail a person cannot translate. */
+    readonly detail: string
+  }
   /** The deployment mounts no web capability, so no page can be read. */
-  | { readonly kind: 'noWeb' }
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'noWeb'
+  }
   /** The page states its figures in a currency the document does not price in. */
-  | { readonly kind: 'currency'; readonly found: string; readonly expected: string }
+  | {
+    /** Discriminator naming this reason. */
+    readonly kind: 'currency'
+    /** Currency the page stated its figures in. */
+    readonly found: string
+    /** Currency the document prices in. */
+    readonly expected: string
+  }
 
 /** Rates the Host read from the provider's published price page. */
 export interface PriceSnapshot {
@@ -286,8 +336,13 @@ const priceSnapshotSchema: Schema<PriceSnapshot | null> = Schema.union([
   }),
 ])
 
-/** The namespace schema; `settings.register` resolves and validates against it. */
-export const BillingSettingsSchema: Schema<BillingSettings> = Schema.object({
+/**
+ * Field schemas this plugin declares live in its own Config, so the Host half
+ * and the browser page share one contract: the page edits and the Host writes
+ * address the same fields by name, and the schema is what a value is validated
+ * against on both sides of that boundary.
+ */
+export const BillingSettingsFields = {
   currency: Schema.string().default(DEFAULT_CURRENCY),
   models: Schema.dict(rateSchema).default({}),
   cache: balanceSchema.default(null),
@@ -295,7 +350,10 @@ export const BillingSettingsSchema: Schema<BillingSettings> = Schema.object({
   official: priceSnapshotSchema.default(null),
   officialError: priceFailureSchema.default(null),
   officialRequest: Schema.union([Schema.const(null), Schema.number()]).default(null),
-})
+} as const
+
+/** The complete live value, resolved from the fields above. */
+export const BillingSettingsSchema: Schema<BillingSettings> = Schema.object({ ...BillingSettingsFields })
 
 /** Token buckets one route was billed for, in the provider's own units. */
 export interface RouteUsage {
