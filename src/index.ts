@@ -119,8 +119,9 @@ export const Config = Schema.object({
  * @param config - endpoints, credential, timing values, and the live fields.
  */
 export function apply(ctx: Context, config: Config): void {
-  // This plugin carries its own settings page, so the generated one is turned
-  // off: the page is registered by the browser half against the same entry id.
+  // This plugin carries its own configuration page, so the generated one is
+  // turned off: the page is registered by the browser half against the same
+  // entry id.
   ctx.inject(['settings'], (child) => {
     child.effect(() => child.settings.configure({ auto: false }, ctx.fiber))
   })

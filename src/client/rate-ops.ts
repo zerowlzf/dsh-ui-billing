@@ -2,10 +2,10 @@
  * The settings operations one rate-row save produces.
  *
  * The Billing page hands this module what the user typed, field by field and
- * band by band, and the module answers what the namespace should be told. It
+ * band by band, and the module answers what the entry should be told. It
  * is pure and lives apart from the plugin body so the rules that decide between
  * writing, clearing, and ignoring a value are stated once, in one place, and
- * can be read without a settings document.
+ * can be read without a configuration entry.
  *
  * @module @deepseek-ai/dsh-client-ui-billing/rate-ops
  */

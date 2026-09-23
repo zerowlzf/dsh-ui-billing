@@ -20,6 +20,8 @@
 
 import type { TurnTailChatData } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
+import { bandAt, bandFor, priceUsage, priceWindowAt, routeKey, type PriceWindow } from '../settings.ts'
+import type { ModelRate } from '../settings.ts'
 
 /**
  * Exact provider-reported token accounting for every attempt in one completed
@@ -30,8 +32,6 @@ import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
  * reads the accounting the tail carries and never names a shape of its own.
  */
 type TurnTokenUsage = NonNullable<TurnTailChatData['tokenUsage']>
-import { bandAt, bandFor, priceUsage, priceWindowAt, routeKey, type PriceWindow } from '../settings.ts'
-import type { ModelRate } from '../settings.ts'
 
 /** Rate lookup: one route's configured rates, keyed `provider/model`. */
 export type RateTable = Readonly<Record<string, ModelRate>>

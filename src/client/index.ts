@@ -1,25 +1,27 @@
 /**
  * Billing plugin, browser half: the session and turn cost pills over the
- * shipped chat surfaces, and the Billing settings page that owns the rates.
+ * shipped chat surfaces, and the Billing configuration page on the Plugins
+ * page that owns the rates.
  *
- * All three surfaces read one value — the `ui-billing` settings namespace —
+ * All three surfaces read one value — the `ui-billing` configuration entry —
  * and price tokens the provider already reported. Nothing here calls a model
  * or adds a request; unmounting the plugin removes every pill and the page.
  *
  * The apply closure owns every ctx read: the bound scope reaches components as
  * a `useBilling` selector hook through the `hooks` compartment, and the provider
- * directory reaches the settings page as the `routeGroups` callback. A
+ * directory reaches the configuration page as the `routeGroups` callback. A
  * component therefore receives plain data and callbacks, never the context.
  *
- * The settings namespace and the copy dictionary are distinct facts and are
- * named apart: a single shared identifier binds the scope to the dictionary,
- * which reads as an unregistered namespace and leaves every surface empty.
+ * The configuration entry and the copy dictionary are distinct facts and are
+ * named apart: a single shared identifier binds the form to the dictionary,
+ * which reads as an unserved entry and leaves every surface empty.
  *
  * @module @deepseek-ai/dsh-client-ui-billing/client
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: pulls the shell's SlotMap merge (the 'settings.section' entry).
+// Type-only: pulls the configuration form service (ctx.configForms) and the
+// shared form contract the pills and the page read.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -71,7 +73,7 @@ export const BILLING_ROW_CONFIG_KEY = `@deepseek-ai/dsh-client-ui-billing#${NS}`
 export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.llm']
 
 /**
- * Register the dictionaries, the settings page, and the two cost pills.
+ * Register the dictionaries, the configuration page, and the two cost pills.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
@@ -83,8 +85,8 @@ export function apply(ctx: ClientContext): void {
    * Read the provider directory and the settings mirror into route groups.
    *
    * Both reads belong to the apply world: the directory arrives over
-   * `ctx.remote.llm`, and the mirror is the shared describe face every settings
-   * surface derives from. A failed read keeps the previous answer.
+   * `ctx.remote.llm`, and the mirror is the shared describe face every
+   * configuration surface derives from. A failed read keeps the previous answer.
    * @returns settlement after the store publishes.
    */
   const routeGroups = async (): Promise<void> => {

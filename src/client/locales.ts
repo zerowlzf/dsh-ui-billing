@@ -4,12 +4,11 @@
  * @module @deepseek-ai/dsh-client-ui-billing/locales
  */
 
-/** Dictionary namespace owned by this plugin's copy; the settings section it renders from is `ui-billing`. */
+/** Dictionary namespace owned by this plugin's copy; the configuration entry it renders from is `ui-billing`. */
 export const LOCALE_NS = 'billing'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'section.label': '计费',
   'section.intro': '会话费用按这里的单价计算：每条路由 = 提供方 / 模型，单价单位为「元 / 百万 tokens」。官方 DeepSeek 路由自带官方公布价，分高峰与空闲两个时段；你可以在这里覆盖它，其余未填写的路由不计费。',
   'section.balanceTitle': 'DeepSeek 账户余额',
   'section.readAt': '读取于 {time}',
@@ -58,13 +57,11 @@ export const zh = {
   'section.addRouteTo': '为 {provider} 添加路由',
   'section.save': '保存',
   'section.saving': '保存中…',
-  'section.saved': '已保存',
   'section.clear': '清除',
   'section.addRoute': '手动添加路由',
   'section.addPlaceholder': 'provider/model',
   'section.add': '添加',
   'section.invalidRoute': '请输入「提供方/模型」，例如 bai/glm-5.3-flash',
-  'section.writeFailed': '保存失败：{message}',
   'pill.sessionCost': '{amount}',
   'pill.spokenSessionCost': '本会话 {amount}',
   'pill.balance': '{amount}',
@@ -77,8 +74,7 @@ export const zh = {
   'pill.dialog.balanceTitle': 'DeepSeek 账户余额',
   'pill.dialog.total': '合计',
   'pill.dialog.unpriced': '未配置单价',
-  'pill.dialog.unpricedHint': '在「设置 → 计费」中为 {route} 填写单价',
-  'pill.dialog.noRateHint': '没有可用的单价，费用无法计算。请在「设置 → 计费」中填写。',
+  'pill.dialog.noRateHint': '没有可用的单价，费用无法计算。请在「插件」页本插件那一行的配置中填写。',
   'pill.dialog.routeSeparator': '、',
   'pill.dialog.balance': '余额',
   'pill.dialog.available': '账户状态',
@@ -102,7 +98,6 @@ export const zh = {
 
 /** English dictionary (same key set). */
 export const en: Record<BillingKey, string> = {
-  'section.label': 'Billing',
   'section.intro': 'Session cost uses the rates below. Each route is a provider/model pair and each rate is per million tokens. Official DeepSeek routes carry the published price, split into a peak and an off-peak window, which you can override here; any other route with no rates is not billed.',
   'section.balanceTitle': 'DeepSeek account balance',
   'section.readAt': 'Read {time}',
@@ -151,13 +146,11 @@ export const en: Record<BillingKey, string> = {
   'section.addRouteTo': 'Add a route to {provider}',
   'section.save': 'Save',
   'section.saving': 'Saving…',
-  'section.saved': 'Saved',
   'section.clear': 'Clear',
   'section.addRoute': 'Add a route manually',
   'section.addPlaceholder': 'provider/model',
   'section.add': 'Add',
   'section.invalidRoute': 'Enter provider/model, for example bai/glm-5.3-flash',
-  'section.writeFailed': 'Save failed: {message}',
   'pill.sessionCost': '{amount}',
   'pill.spokenSessionCost': '{amount} this session',
   'pill.balance': '{amount}',
@@ -170,8 +163,7 @@ export const en: Record<BillingKey, string> = {
   'pill.dialog.balanceTitle': 'DeepSeek account balance',
   'pill.dialog.total': 'Total',
   'pill.dialog.unpriced': 'No rates configured',
-  'pill.dialog.unpricedHint': 'Set rates for {route} in Settings → Billing',
-  'pill.dialog.noRateHint': 'No route has rates yet, so no cost can be computed. Set them in Settings → Billing.',
+  'pill.dialog.noRateHint': 'No route has rates yet, so no cost can be computed. Set them in this plugin’s row configuration on the Plugins page.',
   'pill.dialog.routeSeparator': ', ',
   'pill.dialog.balance': 'Balance',
   'pill.dialog.available': 'Account state',

@@ -1,7 +1,7 @@
-/* Billing settings page: an intro line, the read-only balance card, then one
+/* Billing configuration page on the Plugins page: an intro line, the read-only balance card, then one
    card per configured provider. A card is closed by default and summarises the
    models its rates apply to; the price fields appear behind its edit control.
-   Tokens match the shipped settings pages (secondary text tier, alias borders
+   Tokens match the shipped configuration pages (secondary text tier, alias borders
    and surfaces). */
 
 .page {

@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 const PACKAGE_PATHS = [
   'src',
   'tests',
+  'locale',
   'package.json',
   'tsconfig.json',
   'tsconfig.client.json',

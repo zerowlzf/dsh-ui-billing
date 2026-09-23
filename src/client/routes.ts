@@ -1,5 +1,5 @@
 /**
- * Route discovery for the Billing settings page.
+ * Route discovery for the Billing configuration page.
  *
  * The page lists the models the user actually configured, so it reads the same
  * facts the Models page joins: the registered provider routes (with their
@@ -85,7 +85,7 @@ interface DirectoryEntry {
   readonly settingsPath: readonly string[]
 }
 
-/** One settings namespace as the describe mirror reports it. */
+/** One configuration entry as the describe mirror reports it. */
 interface NamespaceView {
   readonly ns: string
   /** Resolved value across every layer, base and shipped defaults included. */

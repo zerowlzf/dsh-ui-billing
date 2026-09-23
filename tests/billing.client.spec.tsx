@@ -294,7 +294,7 @@ describe('session cost pill', () => {
     const pill = screen.getByLabelText('Session cost unavailable')
     expect(pill.textContent).toContain('-')
     fireEvent.click(pill)
-    expect(screen.getByText('No route has rates yet, so no cost can be computed. Set them in Settings → Billing.')).toBeDefined()
+    expect(screen.getByText('No route has rates yet, so no cost can be computed. Set them in this plugin’s row configuration on the Plugins page.')).toBeDefined()
     expect(screen.getByText('x/y')).toBeDefined()
     expect(screen.getByText('No rates configured')).toBeDefined()
   })
@@ -1432,15 +1432,23 @@ describe('settings page', () => {
     fireEvent.change(field, { target: { value: 'x' } })
     fireEvent.keyDown(field, { key: 'a' })
     fireEvent.keyDown(field, { key: 'Enter' })
-    // Both entry points state the same form error from the one field state.
-    expect(screen.getAllByText('Enter provider/model, for example bai/glm-5.3-flash').length).toBe(2)
+    // Each entry point keeps its own typed text and its own error, so a key
+    // mistyped in one marks that input alone: one shared state would light up
+    // the other as well, and would mirror every keystroke into it.
+    const invalid = 'Enter provider/model, for example bai/glm-5.3-flash'
+    expect(screen.getAllByText(invalid)).toHaveLength(1)
     fireEvent.change(field, { target: { value: 'x/only' } })
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(screen.getByLabelText('x/only Cache hit')).toBeDefined()
+    expect(screen.queryByText(invalid)).toBeNull()
 
-    // The page-level field ignores every key but Enter.
-    fireEvent.keyDown(screen.getByLabelText('Add a route manually'), { key: 'a' })
+    // The page-level field ignores every key but Enter, and carries its own error.
+    const entry = screen.getByLabelText('Add a route manually')
+    fireEvent.keyDown(entry, { key: 'a' })
     expect(screen.queryAllByLabelText('a Cache hit')).toHaveLength(0)
+    fireEvent.change(entry, { target: { value: 'nope' } })
+    fireEvent.keyDown(entry, { key: 'Enter' })
+    expect(screen.getAllByText(invalid)).toHaveLength(1)
   })
 
   it('states a refused write that is not an Error', async () => {

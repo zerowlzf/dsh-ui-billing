@@ -116,8 +116,13 @@ export function BillingPage({
   const [removed, setRemoved] = useState<ReadonlySet<string>>(() => new Set())
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
+  // Two inputs name a route by hand — one inside an open provider card, one on
+  // the page's own entry card — and each keeps its own typed text and its own
+  // error: one shared state would mirror every keystroke into the other input.
   const [manual, setManual] = useState('')
   const [manualError, setManualError] = useState(false)
+  const [manualEntry, setManualEntry] = useState('')
+  const [manualEntryError, setManualEntryError] = useState(false)
   // One provider card is open at a time: the page shows what the rates apply to
   // (the models the user configured), and the fields appear on demand.
   const [editing, setEditing] = useState<string | undefined>(undefined)
@@ -301,21 +306,33 @@ export function BillingPage({
     if (form === undefined) return
     setFailed(false)
     try {
-      await form.mutate([{ op: 'set', path: ['officialRequest'], value: Date.now() }], form.state.revision)
+      const accepted = await form.mutate(
+        [{ op: 'set', path: ['officialRequest'], value: Date.now() }], form.state.revision,
+      )
+      // A refused write answers rather than rejecting, and it says so here: a
+      // request that never reached the Host would otherwise look asked-for.
+      if (!accepted) setFailed(true)
     } catch {
       setFailed(true)
     }
   }
 
-  const addManual = (): void => {
-    const typed = manual.trim()
+  /**
+   * Add the route typed into one of the page's two inputs.
+   * @param source - the input that submitted: an open provider card's, or the page's own.
+   */
+  const addManual = (source: 'card' | 'entry'): void => {
+    const typed = (source === 'card' ? manual : manualEntry).trim()
     const at = typed.indexOf(ROUTE_SEPARATOR)
     if (at <= 0 || at === typed.length - 1) {
-      setManualError(true)
+      if (source === 'card') setManualError(true)
+      else setManualEntryError(true)
       return
     }
-    setManualError(false)
-    setManual('')
+    if (source === 'card') setManualError(false)
+    else setManualEntryError(false)
+    if (source === 'card') setManual('')
+    else setManualEntry('')
     // The typed route joins the page's own model list for the provider it names,
     // so its row exists to be priced before anything is stored; the card then
     // stays while its price is unsaved.
@@ -555,9 +572,9 @@ export function BillingPage({
                         placeholder={t('section.addPlaceholder')}
                         aria-label={t('section.addRouteTo', { provider })}
                         onChange={(event) => { setManual(event.currentTarget.value) }}
-                        onKeyDown={(event) => { if (event.key === 'Enter') addManual() }}
+                        onKeyDown={(event) => { if (event.key === 'Enter') addManual('card') }}
                       />
-                      <Button size="sm" variant="outline" onClick={addManual}>{t('section.add')}</Button>
+                      <Button size="sm" variant="outline" onClick={() => { addManual('card') }}>{t('section.add')}</Button>
                     </div>
                     {manualError && <div className={css.warn}>{t('section.invalidRoute')}</div>}
                   </div>
@@ -578,12 +595,12 @@ export function BillingPage({
                 value={manual}
                 placeholder={t('section.addPlaceholder')}
                 aria-label={t('section.addRoute')}
-                onChange={(event) => { setManual(event.currentTarget.value) }}
-                onKeyDown={(event) => { if (event.key === 'Enter') addManual() }}
+                onChange={(event) => { setManualEntry(event.currentTarget.value) }}
+                onKeyDown={(event) => { if (event.key === 'Enter') addManual('entry') }}
               />
-              <Button size="sm" variant="outline" onClick={addManual}>{t('section.add')}</Button>
+              <Button size="sm" variant="outline" onClick={() => { addManual('entry') }}>{t('section.add')}</Button>
             </div>
-            {manualError && <div className={css.warn}>{t('section.invalidRoute')}</div>}
+            {manualEntryError && <div className={css.warn}>{t('section.invalidRoute')}</div>}
           </div>
         </section>
 

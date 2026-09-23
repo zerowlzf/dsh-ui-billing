@@ -1,9 +1,10 @@
 /**
- * The `ui-billing` settings namespace: its name, value contract, schema, and
+ * The `ui-billing` configuration entry: its name, value contract, fields, and
  * the pure rate fold both faces share.
  *
  * The value mixes three kinds of fact. `models` is user configuration — one
- * rate row per `provider/model` route, written by the Billing settings page.
+ * rate row per `provider/model` route, written by the Billing configuration
+ * page on the Plugins page.
  * `cache` and `official` are Host-owned state: the newest DeepSeek balance and
  * the newest published price table the Host could read, which the browser
  * displays without a Remote of its own.
@@ -229,7 +230,7 @@ export interface BillingSettings {
   /**
    * Currency rates are stated in, and the code every cost is displayed with
    * before a balance names its own. A deployment that bills in another
-   * currency sets it in the settings document.
+   * currency sets it in the configuration entry.
    */
   currency: string
   /** Rate rows keyed `provider/model`; absent routes are priced by nothing. */
@@ -248,8 +249,8 @@ export interface BillingSettings {
    *
    * A published price list moves rarely, so the automatic read is long-spaced
    * and a restart inside that interval does not re-read a fresh table. The page
-   * is what knows someone wants the figures now, and the settings document is
-   * the one store both halves share, so the request travels as this write: the
+   * is what knows someone wants the figures now, and the configuration entry
+   * is the one store both halves share, so the request travels as this write: the
    * Host reads the page and clears the field when that read settles.
    */
   officialRequest: number | null
@@ -351,9 +352,6 @@ export const BillingSettingsFields = {
   officialError: priceFailureSchema.default(null),
   officialRequest: Schema.union([Schema.const(null), Schema.number()]).default(null),
 } as const
-
-/** The complete live value, resolved from the fields above. */
-export const BillingSettingsSchema: Schema<BillingSettings> = Schema.object({ ...BillingSettingsFields })
 
 /** Token buckets one route was billed for, in the provider's own units. */
 export interface RouteUsage {

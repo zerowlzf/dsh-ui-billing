@@ -1,6 +1,6 @@
 # Contributing / maintaining this repository
 
-This repository is the **release snapshot** of one DSH Web plugin: `@deepseek-ai/dsh-client-ui-billing`. Its files are a byte-for-byte copy of the package directory `packages/client/ui-billing` in [zerowlzf/deepseek-harness](https://github.com/zerowlzf/deepseek-harness) on the branch `update/0.1.7-rc.1`, which is a fork of the DeepSeek Harness carrying this plugin alongside the harness it extends. That branch is the one whose baseline this snapshot names: the plugin is built against DSH `0.1.7-rc.1`.
+This repository is the **release snapshot** of one DSH Web plugin: `@deepseek-ai/dsh-client-ui-billing`. Its files are a byte-for-byte copy of the package directory `packages/client/ui-billing` in [zerowlzf/deepseek-harness](https://github.com/zerowlzf/deepseek-harness) on the `master` branch, which is a fork of the DeepSeek Harness carrying this plugin alongside the harness it extends. That branch is the one whose baseline this snapshot names: the plugin is built against DSH `0.1.7-rc.1`.
 
 ## Why the code is developed in the fork
 
@@ -44,4 +44,4 @@ A release is a tag on both repositories, cut from the same content:
 
 ## Where the design record lives
 
-The decisions behind the plugin — the plugin's own live configuration fields as the Host's whole surface, the two price windows and where they come from, the folds behind each figure, the published-price read through `ctx.web`, the manual read as a settings write — are recorded in the fork as an Agent Note: [`.agents/notes/implemented/feature/2026-09-13-web-billing-display-over-user-owned-rates.md`](https://github.com/zerowlzf/deepseek-harness/blob/update/0.1.7-rc.1/.agents/notes/implemented/feature/2026-09-13-web-billing-display-over-user-owned-rates.md). It is kept current with the code and is the first thing to read before changing behaviour.
+The decisions behind the plugin — the plugin's own live configuration fields as the Host's whole surface, the two price windows and where they come from, the folds behind each figure, the published-price read through `ctx.web`, the manual read as a configuration write — are recorded in the fork as an Agent Note: [`.agents/notes/implemented/feature/2026-09-13-web-billing-display-over-user-owned-rates.md`](https://github.com/zerowlzf/deepseek-harness/blob/master/.agents/notes/implemented/feature/2026-09-13-web-billing-display-over-user-owned-rates.md). It is kept current with the code and is the first thing to read before changing behaviour.
