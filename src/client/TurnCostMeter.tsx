@@ -4,20 +4,23 @@
 //
 // The turn's token accounting comes from the turn-tail payload, which is the
 // same evidence the Turn-usage dialog shows and the only per-turn total the
-// session log can prove; the loaded window supplies each attempt's route, so a
-// turn that switched models is priced per attempt. A turn interrupted before
+// session log can prove. That payload names the routes that billed the turn but
+// carries nothing per attempt, and the loaded Chat nodes carry each attempt's
+// usage and settle time without the route that served it, so a turn is priced
+// when its own accounting names one route and withheld when it names several:
+// the dialog names the routes it could not attribute. A turn interrupted before
 // any finalized text still owns its accounting and still renders the row, so
 // this pill prices whatever the row's own evidence holds.
 
 import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
-import type { ChatConversationViewNode, TurnTailChatData } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { TurnTailChatData } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { DEFAULT_CURRENCY, pricesByWindow, routeKey, type BillingSettings, type ModelRate } from '../settings.ts'
+import { DEFAULT_CURRENCY, pricesByWindow, type BillingSettings, type ModelRate } from '../settings.ts'
 import type { BillingPillsInjected } from './face.ts'
 import { LOCALE_NS } from './locales.ts'
 import { effectiveRates } from './official-rates.ts'
-import { turnCost, turnRouteUsage, turnRoutes, type TurnAttempt, type TurnRouteUsage } from './cost.ts'
+import { turnCost, turnRouteUsage, turnRoutes, type TurnRouteUsage } from './cost.ts'
 import { formatAmount, windowKey } from './format.ts'
 import { IconCoinOutline16 } from './icons.tsx'
 import { currencyOf } from './CostMeter.tsx'
@@ -38,59 +41,6 @@ export type TurnCostMeterProps =
   & PropsRuntime<'conversation.chat.turnTail'>
   & InjectFace<BillingPillsInjected>
   & PropsLocale<typeof LOCALE_NS>
-
-/** Read one finite number out of a provider-reported usage payload. */
-function count(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
-}
-
-/**
- * Read the loaded attempts of one turn, with the moment each settled.
- *
- * The settle time is what places an attempt in a price window: it is the only
- * instant the durable log states for an attempt, and the tokens were spent
- * during the request that ended there.
- * @param nodes - the loaded Chat nodes.
- * @param turn - the turn to collect.
- * @returns one entry per assistant attempt that reported usage, a route, and a time.
- */
-export function attemptsOf(nodes: readonly ChatConversationViewNode[], turn: number): TurnAttempt[] {
-  const attempts: TurnAttempt[] = []
-  for (const node of nodes) {
-    // The assistant renderer kind, which is one row per settled or interrupted
-    // Assistant step: the per-attempt accounting a turn is billed for.
-    if (node.kind !== 'assistant-step') continue
-    const data = node.data as {
-      readonly turn?: unknown
-      readonly finalNode?: {
-        readonly usage?: unknown
-        readonly time?: unknown
-        readonly provenance?: { readonly provider?: unknown; readonly model?: unknown }
-      }
-    }
-    if (data.turn !== turn) continue
-    const finalNode = data.finalNode
-    const usage = finalNode?.usage
-    if (typeof usage !== 'object' || usage === null) continue
-    const provider = finalNode?.provenance?.provider
-    const model = finalNode?.provenance?.model
-    if (typeof provider !== 'string' || provider.length === 0) continue
-    if (typeof model !== 'string' || model.length === 0) continue
-    const at = finalNode?.time
-    if (typeof at !== 'number' || !Number.isFinite(at)) continue
-    attempts.push({
-      route: routeKey(provider, model),
-      at,
-      buckets: {
-        uncachedInputTokens: count(Reflect.get(usage, 'inputTokens')),
-        outputTokens: count(Reflect.get(usage, 'outputTokens')),
-        cacheReadTokens: count(Reflect.get(usage, 'cacheReadTokens')),
-        cacheWriteTokens: count(Reflect.get(usage, 'cacheWriteTokens')),
-      },
-    })
-  }
-  return attempts
-}
 
 /** Price one already-resolved charge row. */
 function rowCost(row: TurnRouteUsage, rates: NonNullable<BillingSettings['models']>): number {
@@ -138,13 +88,12 @@ export function TurnCostMeter({ turn: location, useChat, useBilling, t }: TurnCo
   if (usage === undefined) return null
 
   const rates = effectiveRates(settings?.models, settings?.official ?? null)
-  const attempts = attemptsOf(nodes, turn)
-  const rows = turnRouteUsage(usage, attempts, rates, closedAt)
+  const rows = turnRouteUsage(usage, rates, closedAt)
   const cost = turnCost(rows, rates)
-  // A turn whose accounting names several routes and whose attempts are no
-  // longer loaded cannot be split: the figure is withheld and the dialog names
-  // the routes it could not attribute. It is the only reason for a priced row
-  // to be absent, so the routes are read only then.
+  // A turn whose accounting names several routes cannot be attributed: the
+  // figure is withheld and the dialog names the routes it could not place. It is
+  // the only reason for a priced row to be absent, so the routes are read only
+  // then.
   const named = rows.length === 0 ? turnRoutes(usage) : []
   const currency = currencyOf(settings?.cache ?? null, settings?.currency ?? DEFAULT_CURRENCY)
   const priced = cost.priced.length > 0

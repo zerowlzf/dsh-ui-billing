@@ -10,7 +10,7 @@ import type { ModelRate, RouteUsage } from '../src/settings.ts'
 import { bandAt, bandFor, parseRate, priceUsage, priceWindowAt, routeKey, splitRouteKey } from '../src/settings.ts'
 import {
   bucketDelta, isEmptyBuckets, sessionCost, turnCost, turnRouteUsage,
-  turnRoutes, type SessionBuckets, type TurnAttempt, type TurnBuckets, type TurnRouteUsage,
+  turnRoutes, type SessionBuckets, type TurnBuckets, type TurnRouteUsage,
 } from '../src/client/cost.ts'
 import {
   ageOf, balanceFailureText, currencySymbol, formatAmount, formatBalance, priceFailureText, windowKey,
@@ -154,101 +154,47 @@ describe('session accumulation', () => {
   })
 })
 
-describe('turn splits', () => {
+describe('turn routes', () => {
   const turnBuckets = (uncachedInputTokens: number, outputTokens: number): TurnBuckets => ({
     uncachedInputTokens, outputTokens, cacheReadTokens: 0, cacheWriteTokens: 0,
   })
-  const attempt = (route: string, buckets: TurnBuckets, at = PEAK_AT): TurnAttempt => ({ route, at, buckets })
 
-  it('sums one turn’s attempts per route, in first-billed order', () => {
-    const usage = {
-      uncachedInputTokens: 30, outputTokens: 5, totalTokens: 35, cacheReadTokens: 0, cacheWriteTokens: 0,
-    }
-    const rows = turnRouteUsage(usage, [
-      attempt('a/m', turnBuckets(10, 2)),
-      attempt('b/m', turnBuckets(5, 1)),
-      attempt('a/m', turnBuckets(15, 2)),
-    ], { 'a/m': FLAT, 'b/m': FLAT }, PEAK_AT)
-    expect(rows).toEqual([
-      { route: 'a/m', window: 'peak', buckets: turnBuckets(25, 4) },
-      { route: 'b/m', window: 'peak', buckets: turnBuckets(5, 1) },
-    ])
-  })
+  /** A turn's own accounting naming one route, with both buckets billed. */
+  const singleRoute = {
+    uncachedInputTokens: 30, outputTokens: 5, totalTokens: 35,
+    routes: [{ provider: 'a', model: 'm' }],
+  }
 
-  it('gives one route one row per price window it was billed in', () => {
-    const usage = {
-      uncachedInputTokens: 30, outputTokens: 5, totalTokens: 35, cacheReadTokens: 0, cacheWriteTokens: 0,
-    }
-    const rows = turnRouteUsage(usage, [
-      attempt('a/m', turnBuckets(10, 2), PEAK_AT),
-      attempt('a/m', turnBuckets(20, 3), OFF_PEAK_AT),
-    ], { 'a/m': BANDED }, PEAK_AT)
-    expect(rows).toEqual([
-      { route: 'a/m', window: 'peak', buckets: turnBuckets(10, 2) },
-      { route: 'a/m', window: 'offPeak', buckets: turnBuckets(20, 3) },
-    ])
-    // The off-peak row is charged at the half-price band, the peak row in full.
-    expect(turnCost(rows, { 'a/m': BANDED }).total).toBeCloseTo(
-      (10 * 4.5 + 2 * 13.5) / 1_000_000 + (20 * 2.25 + 3 * 6.75) / 1_000_000,
-      10,
-    )
-  })
-
-  it('keeps one row for a route that publishes a single price', () => {
-    const usage = {
-      uncachedInputTokens: 30, outputTokens: 5, totalTokens: 35, cacheReadTokens: 0, cacheWriteTokens: 0,
-    }
-    const rows = turnRouteUsage(usage, [
-      attempt('a/m', turnBuckets(10, 2), PEAK_AT),
-      attempt('a/m', turnBuckets(20, 3), OFF_PEAK_AT),
-    ], { 'a/m': FLAT }, PEAK_AT)
-    expect(rows).toEqual([{ route: 'a/m', window: 'peak', buckets: turnBuckets(30, 5) }])
-  })
-
-  it('charges a retried attempt remainder at the last route', () => {
-    const usage = {
-      uncachedInputTokens: 50, outputTokens: 9, totalTokens: 59, cacheReadTokens: 0, cacheWriteTokens: 0,
-    }
-    const rows = turnRouteUsage(usage, [
-      attempt('a/m', turnBuckets(10, 2)),
-      attempt('b/m', turnBuckets(20, 3)),
-    ], { 'a/m': FLAT, 'b/m': FLAT }, PEAK_AT)
-    expect(rows).toEqual([
-      { route: 'a/m', window: 'peak', buckets: turnBuckets(10, 2) },
-      { route: 'b/m', window: 'peak', buckets: turnBuckets(40, 7) },
-    ])
-  })
-
-  it('has no rows without loaded attempts', () => {
-    expect(turnRouteUsage({
-      uncachedInputTokens: 1, outputTokens: 1, totalTokens: 2,
-    }, [], {}, PEAK_AT)).toEqual([])
-  })
-
-  it('prices an unattempted turn under its single named route', () => {
-    // One named route is exact even with no surviving attempt: every billed
-    // attempt ran there, and the turn's own close time places it in a window.
-    const usage = {
-      uncachedInputTokens: 30, outputTokens: 5, totalTokens: 35,
-      routes: [{ provider: 'a', model: 'm' }],
-    }
-    expect(turnRouteUsage(usage, [], { 'a/m': BANDED }, PEAK_AT))
+  it('prices a turn under the single route its own accounting names', () => {
+    // The turn's close time is the only instant its evidence states, and it is
+    // what places the charge in a price window.
+    expect(turnRouteUsage(singleRoute, { 'a/m': BANDED }, PEAK_AT))
       .toEqual([{ route: 'a/m', window: 'peak', buckets: turnBuckets(30, 5) }])
-    expect(turnRouteUsage(usage, [], { 'a/m': BANDED }, OFF_PEAK_AT))
+    expect(turnRouteUsage(singleRoute, { 'a/m': BANDED }, OFF_PEAK_AT))
       .toEqual([{ route: 'a/m', window: 'offPeak', buckets: turnBuckets(30, 5) }])
   })
 
-  it('declines a turn whose several routes have no surviving attempt', () => {
-    // Stating the aggregate under each route would charge the turn once per
-    // route, so the fold returns nothing and the caller names what it could not
-    // attribute.
+  it('keeps one row for a route that publishes a single price', () => {
+    expect(turnRouteUsage(singleRoute, { 'a/m': FLAT }, OFF_PEAK_AT))
+      .toEqual([{ route: 'a/m', window: 'peak', buckets: turnBuckets(30, 5) }])
+  })
+
+  it('declines a turn whose accounting names several routes', () => {
+    // Nothing loaded states which attempt ran on which route, so stating the
+    // aggregate under each of them would charge the turn once per route: the
+    // fold returns nothing and the caller names what it could not attribute.
     const usage = {
       uncachedInputTokens: 30, outputTokens: 5, totalTokens: 35,
       routes: [{ provider: 'a', model: 'm' }, { provider: 'b', model: 'n' }],
     }
     const rates = { 'a/m': FLAT, 'b/n': FLAT }
-    expect(turnRouteUsage(usage, [], rates, PEAK_AT)).toEqual([])
-    expect(turnCost(turnRouteUsage(usage, [], rates, PEAK_AT), rates).total).toBe(0)
+    expect(turnRouteUsage(usage, rates, PEAK_AT)).toEqual([])
+    expect(turnCost(turnRouteUsage(usage, rates, PEAK_AT), rates).total).toBe(0)
+  })
+
+  it('declines a turn whose accounting names no route', () => {
+    expect(turnRouteUsage({ uncachedInputTokens: 1, outputTokens: 1, totalTokens: 2 }, {}, PEAK_AT))
+      .toEqual([])
   })
 
   it('prices priced rows, reports unpriced routes, and counts each route once', () => {

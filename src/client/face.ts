@@ -28,10 +28,10 @@ export interface BillingPillsInjected {
 /**
  * The configuration page's injected face: the directory it lists.
  *
- * The rates are not this half's to write — the Plugins page owns the row
- * entry's form and hands it to the page — so the page's face carries only the
- * read the page cannot perform itself: the provider directory, which arrives
- * over `ctx.remote.llm` inside the apply closure.
+ * The rates are not this half's to write — the Plugins page owns the entry's
+ * form and hands it to the page — so the page's face carries only the read the
+ * page cannot perform itself: the provider directory, which arrives over
+ * `ctx.remote.llm` inside the apply closure.
  */
 export interface BillingPageInjected {
   /** Reactive sources are bound by the renderer into `use<Name>` selector hooks. */

@@ -9,6 +9,7 @@ export const LOCALE_NS = 'billing'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
+  'item.title': '计费',
   'section.intro': '会话费用按这里的单价计算：每条路由 = 提供方 / 模型，单价单位为「元 / 百万 tokens」。官方 DeepSeek 路由自带官方公布价，分高峰与空闲两个时段；你可以在这里覆盖它，其余未填写的路由不计费。',
   'section.balanceTitle': 'DeepSeek 账户余额',
   'section.readAt': '读取于 {time}',
@@ -87,7 +88,7 @@ export const zh = {
   'turn.costUnknown': '费用 -',
   'turn.title': '本轮费用',
   'turn.unpriced': '未配置单价，费用未计入',
-  'turn.unattributed': '本轮使用了 {routes} 多条路由，已加载的证据不足以拆分，费用未计入',
+  'turn.unattributed': '本轮使用了 {routes} 多条路由，本轮账目无法把它们拆开，费用未计入',
   'turn.unevidenced': '本轮没有可用于归属路由的证据，费用未计入',
   'value.unavailable': '-',
   'value.justNow': '刚刚',
@@ -98,6 +99,7 @@ export const zh = {
 
 /** English dictionary (same key set). */
 export const en: Record<BillingKey, string> = {
+  'item.title': 'Billing',
   'section.intro': 'Session cost uses the rates below. Each route is a provider/model pair and each rate is per million tokens. Official DeepSeek routes carry the published price, split into a peak and an off-peak window, which you can override here; any other route with no rates is not billed.',
   'section.balanceTitle': 'DeepSeek account balance',
   'section.readAt': 'Read {time}',
@@ -176,7 +178,7 @@ export const en: Record<BillingKey, string> = {
   'turn.costUnknown': 'Cost -',
   'turn.title': 'Turn cost',
   'turn.unpriced': 'No rates configured; this turn is not billed',
-  'turn.unattributed': 'This turn ran on several routes ({routes}), and the loaded evidence cannot split them, so no cost is counted',
+  'turn.unattributed': 'This turn ran on several routes ({routes}) and its own accounting cannot split them, so no cost is counted',
   'turn.unevidenced': 'This turn carries no route evidence to attribute, so no cost is counted',
   'value.unavailable': '-',
   'value.justNow': 'just now',

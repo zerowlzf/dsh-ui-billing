@@ -5,12 +5,12 @@
 // its edit control, one row per price window. Rates are per million tokens in
 // the account's currency, which is the unit the provider bills in.
 //
-// The page is a custom configuration page: the Plugins page owns this row
-// entry's form and hands it over as `form`, so an edit is staged here and one
-// save writes every staged write through `form.mutate`. The shared scalar field
-// kit cannot express this page's rows — one rate field per route and price
-// window, over a map keyed by `provider/model` — which is the custom-page case
-// the configuration contract documents.
+// The page is a custom configuration page: the Plugins page owns this entry's
+// form and hands it over as `form`, so an edit is staged here and one save
+// writes every staged write through `form.mutate`. The shared scalar field kit
+// cannot express this page's rows — one rate field per route and price window,
+// over a map keyed by `provider/model` — which is the custom-page case the
+// configuration contract documents.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, SettingsForm, type SettingsFormLabels } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -231,12 +231,14 @@ export function BillingPage({
    * from the accepted value.
    */
   const save = async (): Promise<void> => {
+    /* v8 ignore next -- the shell renders no save control for a page it handed no form, so this guard only keeps the handler total. */
     if (form === undefined) return
     const ops: SettingsPathOpView[] = []
     for (const route of removed) ops.push({ op: 'unset', path: ['models', route] })
     for (const route of stagedRoutes()) {
       ops.push(...rateOps(route, typedBand(route, 'peak'), typedBand(route, 'offPeak'), rates[route]))
     }
+    /* v8 ignore next -- the shell saves only a staged, valid edit, and both staged shapes produce an operation. */
     if (ops.length === 0) return
     setSaving(true)
     setFailed(false)
@@ -271,7 +273,10 @@ export function BillingPage({
   /** Routes with at least one staged field. */
   const stagedRoutes = (): ReadonlySet<string> => {
     const routes = new Set<string>()
-    for (const key of drafts.keys()) routes.add(key.split('\u0000')[0] ?? '')
+    for (const key of drafts.keys()) {
+      /* v8 ignore next -- a draft key is composed from a route and two more segments, so its first segment is always present. */
+      routes.add(key.split('\u0000')[0] ?? '')
+    }
     return routes
   }
 
@@ -303,6 +308,7 @@ export function BillingPage({
    * read's own settlement, and the card shows the read in flight until then.
    */
   const reread = async (): Promise<void> => {
+    /* v8 ignore next -- the card offers no read control while the entry is unserved, so this guard only keeps the handler total. */
     if (form === undefined) return
     setFailed(false)
     try {
@@ -592,7 +598,7 @@ export function BillingPage({
               <input
                 className={css.input}
                 type="text"
-                value={manual}
+                value={manualEntry}
                 placeholder={t('section.addPlaceholder')}
                 aria-label={t('section.addRoute')}
                 onChange={(event) => { setManualEntry(event.currentTarget.value) }}

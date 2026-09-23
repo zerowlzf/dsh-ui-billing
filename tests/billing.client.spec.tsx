@@ -24,7 +24,7 @@ import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import { DEFAULT_CURRENCY, NS, type BillingSettings } from '../src/settings.ts'
 import { providerRoutes, type ProviderRouteGroup } from '../src/client/routes.ts'
 import { SessionCostMeter, currencyOf, freshness, groupSteps } from '../src/client/CostMeter.tsx'
-import { TurnCostMeter, attemptsOf } from '../src/client/TurnCostMeter.tsx'
+import { TurnCostMeter } from '../src/client/TurnCostMeter.tsx'
 import { BillingPage, type BillingPageProps } from '../src/client/BillingPage.tsx'
 import type { BillingPageInjected, BillingPillsInjected } from '../src/client/face.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -544,30 +544,11 @@ describe('turn cost row', () => {
       },
     },
     {
-      key: 'assistant-1', kind: 'assistant-step', target: 'chat', anchorSeq: 2, location: { kind: 'session' },
-      visibility: 'visible', id: 'assistant-1',
-      data: {
-        turn: 1,
-        finalNode: {
-          usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
-          time: AT,
-          provenance: { provider: 'bai', model: 'glm-5.3-flash' },
-        },
-      },
-    },
-    {
-      // The same Turn's second attempt on another route: the window's own
-      // evidence for what a turn that switched models was billed.
-      key: 'assistant-2', kind: 'assistant-step', target: 'chat', anchorSeq: 4, location: { kind: 'session' },
-      visibility: 'visible', id: 'assistant-2',
-      data: {
-        turn: 1,
-        finalNode: {
-          usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
-          time: AT,
-          provenance: { provider: 'x', model: 'other' },
-        },
-      },
+      // A row of another kind: the pill reads the turn-tail payload alone, and a
+      // node of another kind is skipped rather than inspected.
+      key: 'tool-1', kind: 'tool-call', target: 'chat', anchorSeq: 2, location: { kind: 'session' },
+      visibility: 'visible', id: 'tool-1',
+      data: { turn: 1 },
     },
     {
       // A Turn that ran only on a route with no rate at all, official prices
@@ -581,18 +562,6 @@ describe('turn cost row', () => {
           uncachedInputTokens: 1_000_000, outputTokens: 0, totalTokens: 1_000_000,
           cacheReadTokens: 0, cacheWriteTokens: 0,
           routes: [{ provider: 'x', model: 'other' }],
-        },
-      },
-    },
-    {
-      key: 'assistant-3', kind: 'assistant-step', target: 'chat', anchorSeq: 6, location: { kind: 'session' },
-      visibility: 'visible', id: 'assistant-3',
-      data: {
-        turn: 3,
-        finalNode: {
-          usage: { inputTokens: 1_000_000, outputTokens: 0 },
-          time: AT,
-          provenance: { provider: 'x', model: 'other' },
         },
       },
     },
@@ -629,48 +598,7 @@ describe('turn cost row', () => {
     })
   }
 
-  /** One settled assistant attempt on the route it was billed on. */
-  function step(turn: number, finalNode: unknown): ChatConversationViewNode {
-    return node('assistant-step', `step-${String(turn)}`, { turn, finalNode })
-  }
-
-  it('reads each attempt of the turn, with the moment it settled', () => {
-    expect(attemptsOf(nodes, 1)).toEqual([
-      {
-        route: 'bai/glm-5.3-flash',
-        at: AT,
-        buckets: { uncachedInputTokens: 1_000_000, outputTokens: 1_000_000, cacheReadTokens: 0, cacheWriteTokens: 0 },
-      },
-      {
-        route: 'x/other',
-        at: AT,
-        buckets: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000, cacheWriteTokens: 0 },
-      },
-    ])
-    expect(attemptsOf(nodes, 2)).toEqual([])
-  })
-
-  it('skips an attempt whose node carries no settle time', () => {
-    // Without a time there is no window to charge the attempt in, so it is not
-    // evidence: the turn's own accounting still prices it when one route is
-    // named, and is withheld when several are.
-    const timeless = [
-      {
-        key: 'assistant-1', kind: 'assistant-step', target: 'chat', anchorSeq: 2, location: { kind: 'session' },
-        visibility: 'visible', id: 'assistant-1',
-        data: {
-          turn: 1,
-          finalNode: {
-            usage: { inputTokens: 1_000, outputTokens: 1_000 },
-            provenance: { provider: 'bai', model: 'glm-5.3-flash' },
-          },
-        },
-      },
-    ] as unknown as readonly ChatConversationViewNode[]
-    expect(attemptsOf(timeless, 1)).toEqual([])
-  })
-
-  it('renders the turn total and breaks it down per route', () => {
+  it('renders the turn total and its route', () => {
     const stub = stubConfigForm<BillingSettings>()
     stub.publish(snapshot({
       value: {
@@ -693,12 +621,8 @@ describe('turn cost row', () => {
     const rows = dialog.querySelector('[data-billing-turn-routes]')
     expect(rows?.textContent).toContain('bai/glm-5.3-flash')
     expect(rows?.textContent).toContain('¥18.00')
-    // The second route carries no rates here, so its share is named as unpriced
-    // instead of being folded into the total.
-    expect(rows?.textContent).toContain('x/other')
-    expect(within(dialog).getAllByText('No rates configured').length).toBeGreaterThan(0)
-    // The dialog's footnote names every route it priced, next to the share it
-    // could not price.
+    // The dialog's footnote names the route it priced and the three figures it
+    // charged it at.
     expect(within(dialog).getByText(/bai\/glm-5\.3-flash: 0\.15 \/ 4\.5 \/ 13\.5/)).toBeDefined()
   })
 
@@ -752,10 +676,10 @@ describe('turn cost row', () => {
     expect(empty.container.innerHTML).toBe('')
   })
 
-  it('declines a turn whose several routes have no loaded attempt', () => {
-    // The turn's own accounting names two routes and no attempt survived to
-    // split them, so the pill withholds the figure and the dialog names what it
-    // could not attribute instead of charging the aggregate twice.
+  it('declines a turn whose own accounting names several routes', () => {
+    // Nothing loaded states which attempt ran on which route, so the pill
+    // withholds the figure and the dialog names what it could not attribute
+    // instead of charging the aggregate once per route.
     const stub = stubConfigForm<BillingSettings>()
     stub.publish(snapshot({
       value: {
@@ -791,23 +715,7 @@ describe('turn cost row', () => {
     const pill = screen.getByLabelText('Cost -')
     expect(pill.textContent).toContain('-')
     fireEvent.click(pill)
-    expect(screen.getByText('This turn ran on several routes (bai/glm-5.3-flash, x/other), and the loaded evidence cannot split them, so no cost is counted')).toBeDefined()
-  })
-
-  it('skips an attempt that carries no usage, no route, or no model', () => {
-    // Each of these facts is what an attempt is billed by: without one there is
-    // no charge to attribute, and a node of another turn is another turn's
-    // evidence entirely.
-    const incomplete = [
-      step(1, { time: AT, provenance: { provider: 'a', model: 'b' } }),
-      step(1, { usage: null, time: AT, provenance: { provider: 'a', model: 'b' } }),
-      step(1, { usage: {}, time: AT, provenance: {} }),
-      step(1, { usage: {}, time: AT, provenance: { provider: '' } }),
-      step(1, { usage: {}, time: AT, provenance: { provider: 'a' } }),
-      step(1, { usage: {}, time: AT, provenance: { provider: 'a', model: '' } }),
-      step(2, { usage: {}, time: AT, provenance: { provider: 'a', model: 'b' } }),
-    ]
-    expect(attemptsOf(incomplete, 1)).toEqual([])
+    expect(screen.getByText('This turn ran on several routes (bai/glm-5.3-flash, x/other) and its own accounting cannot split them, so no cost is counted')).toBeDefined()
   })
 
   it('prices a turn that ran in the off-peak window and names the window it used', () => {
@@ -822,14 +730,7 @@ describe('turn cost row', () => {
       },
     }))
     const offPeakAt = Date.UTC(2024, 0, 1, 4, 0)
-    const list = [
-      tail(1, offPeakAt, [{ provider: 'deepseek-official', model: 'deepseek-v4-flash' }]),
-      step(1, {
-        usage: { inputTokens: 1_000_000, outputTokens: 0 },
-        time: offPeakAt,
-        provenance: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
-      }),
-    ]
+    const list = [tail(1, offPeakAt, [{ provider: 'deepseek-official', model: 'deepseek-v4-flash' }])]
     render(
       <TurnCostMeter {...seats()}
         turn={{ turn: 1 } as never} seq={1} openFile={() => {}}
@@ -875,11 +776,6 @@ describe('turn cost row', () => {
           cacheReadTokens: 0, cacheWriteTokens: 0,
           routes: [{ provider: 'deepseek-official', model: 'deepseek-v4-flash' }],
         },
-      }),
-      step(1, {
-        usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
-        time: AT,
-        provenance: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       }),
     ]
     render(
@@ -1376,6 +1272,21 @@ describe('settings page', () => {
     expect(screen.getAllByText('BAI')).toHaveLength(1)
   })
 
+  it('adds a route from the card’s own Add control', async () => {
+    const stub = stubConfigForm<BillingSettings>()
+    stub.publish(snapshot())
+    const face = billingFace(stub, contextDouble(remoteDouble(), baiDirectory()))
+    renderPage(stub, face)
+    await screen.findByText('BAI')
+    fireEvent.click(screen.getByLabelText('Edit rates for bai'))
+
+    const models = document.querySelector('[data-billing-provider-models="bai"]') as HTMLElement
+    const field = within(models).getByLabelText('Add a route to bai')
+    fireEvent.change(field, { target: { value: 'bai/typed-model' } })
+    fireEvent.click(within(models).getByText('Add'))
+    expect(screen.getByLabelText('bai/typed-model Cache hit')).toBeDefined()
+  })
+
   it('keeps one row for a route typed twice', async () => {
     const stub = stubConfigForm<BillingSettings>()
     stub.publish(snapshot())
@@ -1443,12 +1354,17 @@ describe('settings page', () => {
     expect(screen.queryByText(invalid)).toBeNull()
 
     // The page-level field ignores every key but Enter, and carries its own error.
-    const entry = screen.getByLabelText('Add a route manually')
+    const entry = screen.getByLabelText<HTMLInputElement>('Add a route manually')
     fireEvent.keyDown(entry, { key: 'a' })
     expect(screen.queryAllByLabelText('a Cache hit')).toHaveLength(0)
     fireEvent.change(entry, { target: { value: 'nope' } })
     fireEvent.keyDown(entry, { key: 'Enter' })
     expect(screen.getAllByText(invalid)).toHaveLength(1)
+    // Each input also shows what was typed into it: a field reading the other
+    // entry point's text still passes the checks above, because both hand their
+    // own state to `addManual`.
+    expect(entry.value).toBe('nope')
+    expect(screen.getByLabelText<HTMLInputElement>('Add a route to x').value).toBe('')
   })
 
   it('states a refused write that is not an Error', async () => {
@@ -1558,6 +1474,77 @@ describe('settings page', () => {
     expect(screen.getByText('Read 3 d ago')).toBeDefined()
   })
 
+  it('states a read request the Host answered as refused', async () => {
+    const stub = stubConfigForm<BillingSettings>()
+    stub.publish(snapshot({
+      value: {
+        official: { models: {}, currency: 'CNY', at: Date.now(), source: 'https://api-docs.deepseek.com/x' },
+      },
+    }))
+    const describeFace = { ensure: () => Promise.resolve(), getSnapshot: () => ({ view: { namespaces: [] } }) }
+    const face = billingFace(stub, contextDouble(remoteDouble(), describeFace))
+    const { mutate } = renderPage(stub, face)
+
+    // A refused write answers rather than rejecting, and a request the Host
+    // never took would otherwise look asked for.
+    mutate.mockResolvedValueOnce(false)
+    fireEvent.click(await screen.findByText('Read now'))
+    await act(async () => { await Promise.resolve() })
+    expect(screen.getByText('The save was not accepted; try again.')).toBeDefined()
+  })
+
+  it('states a save whose transport failed', async () => {
+    const stub = stubConfigForm<BillingSettings>()
+    stub.publish(snapshot({ value: { models: { 'bai/glm-5.3-flash': FLASH_RATES } } }))
+    const face = billingFace(stub, contextDouble(remoteDouble(), baiDirectory()))
+    const { mutate } = renderPage(stub, face)
+    await screen.findByText('BAI')
+    fireEvent.click(screen.getByLabelText('Edit rates for bai'))
+    fireEvent.change(screen.getByLabelText('bai/glm-5.3-flash Cache hit'), { target: { value: '0.2' } })
+
+    // A transport failure rejects rather than answering, and the staged draft
+    // stays so the save can be repeated.
+    mutate.mockRejectedValueOnce(new Error('offline'))
+    fireEvent.click(screen.getByText('Save'))
+    await act(async () => { await Promise.resolve() })
+    expect(screen.getByText('The save was not accepted; try again.')).toBeDefined()
+    expect(screen.getByLabelText<HTMLInputElement>('bai/glm-5.3-flash Cache hit').value).toBe('0.2')
+  })
+
+  it('answers the card’s one-liner with the summary view', () => {
+    // The Plugins page renders this view as the configuration card's one-liner,
+    // so the card says what the page is for before anyone opens it.
+    const stub = stubConfigForm<BillingSettings>()
+    const face = billingFace(stub)
+    render(
+      <BillingPage
+        {...seats()}
+        view="summary"
+        useBillingGroups={face.useBillingGroups}
+        routeGroups={face.routeGroups}
+        t={t}
+      />,
+    )
+    expect(screen.getByText('Session cost and the DeepSeek balance, priced by the per-route rates you maintain.'))
+      .toBeDefined()
+  })
+
+  it('names a deployment that serves no form for the entry', () => {
+    const stub = stubConfigForm<BillingSettings>()
+    const face = billingFace(stub)
+    render(
+      <BillingPage
+        {...seats()}
+        view="page"
+        useBillingGroups={face.useBillingGroups}
+        routeGroups={face.routeGroups}
+        t={t}
+      />,
+    )
+    expect(screen.getByText('This deployment does not serve the billing configuration, so there are no rates to edit.'))
+      .toBeDefined()
+  })
+
   it('asks the Host to read the published page now', async () => {
     const stored = {
       models: {}, currency: 'CNY', at: Date.now() - 3 * 86_400_000, source: 'https://api-docs.deepseek.com/x',
@@ -1642,6 +1629,10 @@ describe('plugin registration', () => {
     configurable?: readonly unknown[]
     view?: unknown
     fail?: boolean
+    /** Whether the Host serves this plugin's own entry; false for the gated case. */
+    served?: boolean
+    /** Whether the describe mirror holds a view at all; false models a Host that answered nothing. */
+    blank?: boolean
   } = {}) {
     const scope = stubConfigForm<BillingSettings>()
     const ctx = new Context()
@@ -1656,15 +1647,58 @@ describe('plugin registration', () => {
           : { ok: true, value: [...replies.configurable ?? []] }),
       },
     })
+    // The mirror's view with this plugin's own entry in it: both halves ship as
+    // one package, so a deployment serving the directory also serves the entry.
+    const viewNow = (): unknown => {
+      if (replies.blank === true) return undefined
+      const view = replies.view as { namespaces?: readonly { ns: string; value: unknown }[] } | undefined
+      if (replies.served === false) return view
+      const namespaces = [...view?.namespaces ?? []]
+      if (!namespaces.some(entry => entry.ns === NS)) namespaces.push({ ns: NS, value: {} })
+      return { ...view, namespaces }
+    }
+    // The describe mirror and its served-namespace watch, with the real
+    // service's semantics: `whileServed` registers while one watched namespace
+    // is served, drops the registration when none is, and follows the mirror.
+    const listeners = new Set<() => void>()
+    const mirror = {
+      ensure: () => Promise.resolve(),
+      getSnapshot: () => ({ view: viewNow() }),
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    }
     ctx.provide('configForms', {
       get: () => scope.scope,
-      describe: () => ({ ensure: () => Promise.resolve(), getSnapshot: () => ({ view: replies.view }) }),
+      describe: () => mirror,
+      whileServed: (namespaces: readonly string[], register: (served: ReadonlySet<string>) => () => void) => {
+        let off: (() => void) | undefined
+        const sync = (): void => {
+          const served = new Set(
+            ((viewNow() as { namespaces?: readonly { ns: string }[] } | undefined)?.namespaces ?? [])
+              .map(entry => entry.ns))
+          const watched = namespaces.some(namespace => served.has(namespace))
+          if (watched && off === undefined) off = register(served)
+          else if (!watched && off !== undefined) {
+            off()
+            off = undefined
+          }
+        }
+        listeners.add(sync)
+        sync()
+        return () => {
+          listeners.delete(sync)
+          off?.()
+          off = undefined
+        }
+      },
     } as never)
     // The owning views' child declarations, stood up by a bench root entry.
     ctx.slots.register({
       name: 'root',
       children: {
-        'plugins.row.config': { kind: 'keyed', scope: 'root' },
+        'plugins.item': { kind: 'list', scope: 'root' },
         'conversation.composer.dock': { kind: 'list', scope: 'session' },
         'conversation.chat.turnTail': { kind: 'list', scope: 'session' },
       },
@@ -1672,12 +1706,23 @@ describe('plugin registration', () => {
     await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    return { ctx, scope, remote, fiber }
+    /** Move the describe mirror, as the Host's own describe read does. */
+    const serve = (view: unknown): void => {
+      replies.view = view
+      replies.blank = false
+      for (const listener of [...listeners]) listener()
+    }
+    /** Leave the mirror without a view, as a describe read that answered nothing. */
+    const blank = (): void => {
+      replies.blank = true
+      for (const listener of [...listeners]) listener()
+    }
+    return { ctx, scope, remote, fiber, serve, blank }
   }
 
   /** The face the configuration page registration injected, as the renderer resolves it. */
   function faceOf(ctx: Context): BillingPageInjected {
-    const entry = ctx.slots.entries('plugins.row.config')[0] as { inject?: () => BillingPageInjected } | undefined
+    const entry = ctx.slots.entries('plugins.item')[0] as { inject?: () => BillingPageInjected } | undefined
     if (entry?.inject === undefined) throw new Error('the configuration page is not registered')
     return entry.inject()
   }
@@ -1691,19 +1736,43 @@ describe('plugin registration', () => {
 
   it('registers all three surfaces and fiber disposal removes them', async () => {
     const { ctx, fiber } = await mountPlugin()
-    expect(ctx.slots.entries('plugins.row.config')).toHaveLength(1)
+    expect(ctx.slots.entries('plugins.item')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.composer.dock')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
-    // The page is its own row's configuration, keyed `<package name>#<row id>`;
-    // that row id is also the entry id the Host serves, which is what makes the
-    // legacy section of a document written before the move import into it.
-    expect(ctx.slots.entries('plugins.row.config')[0]?.options.key)
-      .toBe('@deepseek-ai/dsh-client-ui-billing#ui-billing')
+    // The configuration page is one of the Plugins page's official-plugin cards,
+    // titled from this package's dictionary. Its id is the entry id the Host
+    // serves, which is what makes the page owner hand the page that entry's form.
+    expect(ctx.slots.entries('plugins.item')[0]?.options).toMatchObject({
+      id: NS,
+      order: 50,
+    })
+    // The composer figures state the display order that places them after the
+    // shipped stats row, which is the entry stating order 0.
+    expect(ctx.slots.entries('conversation.composer.dock')[0]?.options.order).toBe(1)
 
     await fiber.dispose()
-    expect(ctx.slots.entries('plugins.row.config')).toHaveLength(0)
+    expect(ctx.slots.entries('plugins.item')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.composer.dock')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
+  })
+
+  it('shows the configuration card only while the Host serves the entry', async () => {
+    // A deployment whose Host half never composed the entry shows no card, the
+    // way every settings page registered through the same watch behaves.
+    const { ctx, serve } = await mountPlugin({ served: false })
+    expect(ctx.slots.entries('plugins.item')).toHaveLength(0)
+
+    serve({ namespaces: [{ ns: NS, value: {} }] })
+    expect(ctx.slots.entries('plugins.item')).toHaveLength(1)
+
+    serve({ namespaces: [] })
+    expect(ctx.slots.entries('plugins.item')).toHaveLength(0)
+  })
+
+  it('titles the configuration card from this package’s dictionary', async () => {
+    const { ctx } = await mountPlugin()
+    const label = ctx.slots.entries('plugins.item')[0]?.options.label
+    expect(typeof label === 'function' ? label() : label).toBe('Billing')
   })
 
   it('reads the directory through its own face and republishes it on a signal', async () => {
@@ -1735,6 +1804,22 @@ describe('plugin registration', () => {
     const face = faceOf(ctx)
     await act(async () => { await face.routeGroups() })
     expect(face.hooks.billingGroups.getSnapshot()).toEqual([])
+  })
+
+  it('keeps the last directory when the mirror loses its view', async () => {
+    // A describe read that answers nothing while the page is open is not a
+    // directory of nothing: the groups the last read found stay published.
+    const { ctx, blank } = await mountPlugin({
+      registered: [{ id: 'live', name: 'Live' }],
+      view: { namespaces: [{ ns: 'llm-live', value: {} }] },
+    })
+    const face = faceOf(ctx)
+    await act(async () => { await face.routeGroups() })
+    expect(face.hooks.billingGroups.getSnapshot().map(group => group.provider)).toEqual(['live'])
+
+    blank()
+    await act(async () => { await face.routeGroups() })
+    expect(face.hooks.billingGroups.getSnapshot().map(group => group.provider)).toEqual(['live'])
   })
 
   it('publishes nothing when the directory read fails', async () => {

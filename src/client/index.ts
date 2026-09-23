@@ -59,16 +59,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/**
- * The `plugins.row.config` key of this package's own row.
- *
- * The key is `<package name>#<row id>`, and this package keeps its row id equal
- * to {@link NS}: the Host serves the configuration entry under the row id, so
- * the page owner resolves exactly this entry's form, and a document written
- * before the move to Profile configuration is imported into the same id.
- */
-export const BILLING_ROW_CONFIG_KEY = `@deepseek-ai/dsh-client-ui-billing#${NS}`
-
 /** Required services: the slot ledger, copy dictionaries, and the configuration form. */
 export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.llm']
 
@@ -78,6 +68,7 @@ export const inject = ['slots', 'locale', 'configForms', 'remote', 'remote.llm']
  */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(LOCALE_NS, { zh, en }), 'ui-billing: copy dictionaries')
+  const t = ctx.locale.bind(LOCALE_NS)
   const scope = ctx.configForms.get<BillingSettings>(NS)
   const groups = createSnapshotStore<readonly ProviderRouteGroup[]>([])
 
@@ -145,27 +136,37 @@ export function apply(ctx: ClientContext): void {
     routeGroups,
   })
 
-  // The Plugins page hosts a plugin's configuration, so the rates page is this
-  // package's own row entry rather than a Settings section: a plugin page
-  // registers into its bundle row while the Host serves the entry, and the page
-  // owner hands the page that entry's form. The page is the custom-page case the
-  // configuration contract documents — its rows are one rate field per route and
-  // price window, a shape the shared scalar field kit does not express — so it
-  // reads `form.state` and writes through `form.mutate`.
-  ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
-    name: 'plugins.row.config',
-    key: BILLING_ROW_CONFIG_KEY,
+  // The Plugins page lists a plugin's own configuration as a card in its
+  // Official group, beside the settings pages the shipping plugins carry, and a
+  // card opens the page. It is the seat this plugin's page can be reached from:
+  // a row's own page needs the bundle row that declares it, and the shipped web
+  // bundle is a built-in profile bundle the page leaves out of its list, so
+  // nothing would lead there.
+  //
+  // The item id is the entry id the Host serves, so the page owner hands the
+  // page that entry's form — the same staged-edit contract the page is written
+  // against — and the card only appears while the Host serves the entry, the way
+  // every other settings page mounts.
+  ctx.effect(() => ctx.configForms.whileServed([NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({
+    name: 'plugins.item',
+    id: NS,
+    order: 50,
+    label: () => t('item.title'),
     locale: LOCALE_NS,
     inject: injectedPage,
-  }, BillingPage))
+  }, BillingPage))), 'ui-billing: configuration page')
 
   // The composer's ambient dock owns the line these figures belong to, so the
   // dock's own list is the seat: the shipped stats row sits there too, and the
-  // figures join it as one more ambient entry under the composer card.
+  // figures join it as one more ambient entry under the composer card. The
+  // display order places them after that row, which is the shipped reading of
+  // the session; registration order would put this plugin's figures first,
+  // because both entries state order 0 and the plugin assembling later holds no
+  // tie-break of its own.
   ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({
     name: 'conversation.composer.dock',
     id: 'billing',
-    order: 0,
+    order: 1,
     locale: LOCALE_NS,
     inject: injectedPills,
   }, SessionCostMeter))

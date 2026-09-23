@@ -1,19 +1,23 @@
-/* Billing figures inside the shipped composer stats row, wearing the same
-   13/20 tertiary tier as the pills beside them. The row owns placement and
-   wrapping; this module owns only the pills' own skin, so a contribution cannot
-   move the row it joined.
+/* Billing figures beside the shipped composer stats row, wearing the same
+   12/20 reading tier that row's pills carry. The dock owns placement and
+   centring; this module owns only the figures' own skin and the type tier they
+   read at, which the dock does not state for its entries.
 
-   The row spaces every child with its own 12px gap, so these two figures use
+   The dock spaces every child with its own 12px gap, so these two figures use
    that same gap between themselves: one rhythm across the whole line. Their
    meaning rides the icons and each figure's accessible name and hover title
    rather than a word, which keeps the pair narrow — the row is width-bound, and
    at the 680px clamp its content box holds 616px. */
 
 .root {
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  justify-content: center;
   gap: 12px;
   min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
 }
 
 /* Dialog anchor: shrink-wraps its pill so the panel clamp measures the pill. */

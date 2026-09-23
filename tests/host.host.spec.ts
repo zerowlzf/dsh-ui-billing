@@ -16,7 +16,8 @@ import type { WebFetchProvider, WebFetchRequest, WebFetchResult } from '@deepsee
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCredentials } from '../../../credentials/credentials/tests/memory.ts'
 import { DEFAULT_BASE_URL, readBalance } from '../src/account.ts'
-import { Config } from '../src/index.ts'
+import { Config as configSchema } from '../src/index.ts'
+import type { Config as PluginConfig } from '../src/index.ts'
 import { apply, inject } from '../src/index.ts'
 import { DEFAULT_PRICING_URL } from '../src/published-prices.ts'
 import { DEFAULT_CURRENCY, NS } from '../src/settings.ts'
@@ -108,13 +109,13 @@ afterEach(async () => {
 
 /** Resolve one cached read out of the provider's stored document. */
 function storedCache(settings: MemorySettings): unknown {
-  const section = settings.doc[NS] as Record<string, unknown> | undefined
+  const section = settings.doc[NS]
   return section?.['cache']
 }
 
 /** Resolve the stored published table out of the provider's document. */
 function storedOfficial(settings: MemorySettings): unknown {
-  const section = settings.doc[NS] as Record<string, unknown> | undefined
+  const section = settings.doc[NS]
   return section?.['official']
 }
 
@@ -189,21 +190,35 @@ function live<T>(value: T): Volatile<T> {
   return { get: () => value } as Volatile<T>
 }
 
-/** Values the Loader resolves from the plugin's own `Config` schema. */
-const RESOLVED_CONFIG: Config = {
-  apiKeyEnv: 'DEEPSEEK_API_KEY',
-  baseURL: DEFAULT_BASE_URL,
-  refreshIntervalMs: 0,
-  pricingUrl: DEFAULT_PRICING_URL,
-  pricingRefreshIntervalMs: 0,
-  requestTimeoutMs: 15_000,
-  currency: live(DEFAULT_CURRENCY),
-  models: live<Record<string, ModelRate>>({}),
-  cache: live<BalanceSnapshot | null>(null),
-  cacheError: live<ReadFailure | null>(null),
-  official: live<PriceSnapshot | null>(null),
-  officialError: live<PriceFailure | null>(null),
-  officialRequest: live<number | null>(null),
+/**
+ * The values the Loader resolves from the plugin's own `Config` schema, as one
+ * mount's configuration: the deployment keys, a fresh reference per live field,
+ * and the case's overrides last.
+ *
+ * The table is built per call rather than held, so one case's override cannot
+ * reach another's fields, and the spread states overrides only — the lint rule
+ * that refuses a spread of a class instance reads this table's interface (which
+ * shares the schema value's name) as one.
+ * @param overrides - configuration fields this case moves.
+ * @returns the configuration the plugin half is mounted with.
+ */
+function resolvedConfig(overrides: Partial<PluginConfig> = {}): PluginConfig {
+  return {
+    apiKeyEnv: 'DEEPSEEK_API_KEY',
+    baseURL: DEFAULT_BASE_URL,
+    refreshIntervalMs: 0,
+    pricingUrl: DEFAULT_PRICING_URL,
+    pricingRefreshIntervalMs: 0,
+    requestTimeoutMs: 15_000,
+    currency: live(DEFAULT_CURRENCY),
+    models: live<Record<string, ModelRate>>({}),
+    cache: live<BalanceSnapshot | null>(null),
+    cacheError: live<ReadFailure | null>(null),
+    official: live<PriceSnapshot | null>(null),
+    officialError: live<PriceFailure | null>(null),
+    officialRequest: live<number | null>(null),
+    ...overrides,
+  }
 }
 
 /** A live field the test can move: the reference the loader hands the plugin, plus the write a save performs. */
@@ -232,7 +247,7 @@ function cell<T>(value: T): Cell<T> {
  * plugin fiber, and a save that applies one form write the way the loader does.
  */
 async function mount(
-  config: Partial<Config> = {},
+  config: Partial<PluginConfig> = {},
   answers: Answers = {},
   stored: Record<string, unknown> = {},
 ): Promise<{
@@ -255,7 +270,7 @@ async function mount(
   // the entry the form starts from — the way a Profile that already holds a
   // table reaches a plugin that is activating.
   const cells = {
-    currency: cell(DEFAULT_CURRENCY) as Cell<string>,
+    currency: cell(DEFAULT_CURRENCY),
     models: cell<Record<string, ModelRate>>({}),
     cache: cell<BalanceSnapshot | null>(null),
     cacheError: cell<ReadFailure | null>(null),
@@ -267,7 +282,7 @@ async function mount(
   for (const key of Object.keys(cells) as Array<keyof typeof cells>) {
     if (key in entry) (cells[key] as Cell<unknown>).set(entry[key])
   }
-  const fiber = ctx.plugin({ inject, apply }, { ...RESOLVED_CONFIG, ...cells, ...config })
+  const fiber = ctx.plugin({ inject, apply }, resolvedConfig({ ...cells, ...config }))
   cleanups.push(async () => { await fiber.dispose() })
   await fiber
   /**
@@ -290,7 +305,7 @@ describe('configuration', () => {
     // The empty object is what a deployment that sets nothing resolves from;
     // the schema fills every key, which is the fact under test. Ordinary keys
     // resolve to plain values and live ones to a reference read on demand.
-    const resolved = Config({} as never) as unknown as Config
+    const resolved = configSchema({}) as unknown as PluginConfig
     expect({
       apiKeyEnv: resolved.apiKeyEnv,
       baseURL: resolved.baseURL,
@@ -322,7 +337,7 @@ describe('namespace ownership', () => {
 
     // The live fields are this plugin's own Config: no namespace is registered
     // anywhere else, and the entry the browser edits is the one declared here.
-    expect(Object.keys(Config.dict ?? {})).toEqual(expect.arrayContaining([
+    expect(Object.keys(configSchema.dict ?? {})).toEqual(expect.arrayContaining([
       'currency', 'models', 'cache', 'cacheError', 'official', 'officialError', 'officialRequest',
     ]))
     // The balance is this package's own request; the page goes through the web
@@ -353,7 +368,7 @@ describe('namespace ownership', () => {
     await ctx.plugin(Timer)
     const settings = await mountSettings(ctx)
     mountWeb(ctx, page)
-    const fiber = ctx.plugin({ inject, apply }, RESOLVED_CONFIG)
+    const fiber = ctx.plugin({ inject, apply }, resolvedConfig())
     cleanups.push(async () => { await fiber.dispose() })
     // The mount is pending on the missing service, so no read has run yet.
     expect(fetchImpl).not.toHaveBeenCalled()
@@ -426,7 +441,7 @@ describe('namespace ownership', () => {
     const timeout = vi.spyOn(ctx.timer, 'timeout')
     // The spy answers whichever overload was called; the callback form is the
     // one this chain arms, so the callback-and-delay pair is what is asserted.
-    const fiber = ctx.plugin({ inject, apply }, { ...RESOLVED_CONFIG, refreshIntervalMs: 1_000 })
+    const fiber = ctx.plugin({ inject, apply }, resolvedConfig({ refreshIntervalMs: 1_000 }))
     cleanups.push(async () => { await fiber.dispose() })
     await fiber
     await vi.waitFor(() => { expect(timeout).toHaveBeenCalledWith(expect.any(Function), 1_000) })
@@ -440,7 +455,7 @@ describe('namespace ownership', () => {
     new MemoryCredentials(ctx, { DEEPSEEK_API_KEY: 'key-under-test' })
     mountWeb(ctx, page)
     const timeout = vi.spyOn(ctx.timer, 'timeout')
-    const fiber = ctx.plugin({ inject, apply }, { ...RESOLVED_CONFIG, pricingRefreshIntervalMs: 86_400_000 })
+    const fiber = ctx.plugin({ inject, apply }, resolvedConfig({ pricingRefreshIntervalMs: 86_400_000 }))
     cleanups.push(async () => { await fiber.dispose() })
     await fiber
     await vi.waitFor(() => { expect(timeout).toHaveBeenCalledWith(expect.any(Function), 86_400_000) })
@@ -466,7 +481,7 @@ describe('namespace ownership', () => {
     new MemoryCredentials(ctx, { DEEPSEEK_API_KEY: 'key-under-test' })
     mountWeb(ctx, page)
     ctx.logger.warn = warn as never
-    const fiber = ctx.plugin({ inject, apply }, RESOLVED_CONFIG)
+    const fiber = ctx.plugin({ inject, apply }, resolvedConfig())
     cleanups.push(async () => { await fiber.dispose() })
     await fiber
     await vi.waitFor(() => { expect(warn).toHaveBeenCalled() })
@@ -531,6 +546,16 @@ describe('namespace ownership', () => {
     const { settings } = await mount()
     await vi.waitFor(() => { expect(storedOfficial(settings)).not.toBeUndefined() })
     expect(settings.doc[NS]).not.toHaveProperty('officialRequest')
+  })
+
+  it('ignores every live change but the read request', async () => {
+    // Every other live change this half sees is its own write coming back, so a
+    // save that moves one is not a second reason to read the page.
+    const { page, save } = await mount()
+    await vi.waitFor(() => { expect(page).toHaveBeenCalledTimes(1) })
+    save({ currency: 'USD' })
+    await new Promise((resolve) => { setTimeout(resolve, 5) })
+    expect(page).toHaveBeenCalledTimes(1)
   })
 
   it('waits out the interval rather than re-reading a table it still covers', async () => {

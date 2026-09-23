@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包按用户自有的单价，为一次 Web 会话计价。它的 Host 半边把 `ui-billing` 这些字段声明为自己配置里的活字段，并在其中缓存两项来自提供方的读取：DeepSeek 账户余额与公布的价目表。浏览器半边渲染 composer 环境 dock 里的两个费用数字、每个已完成轮次 tail 里的费用胶囊，以及 Plugins 页上用于编辑单价的「计费」配置页。一条路由就是一对 `provider/model`，按「元 / 百万 tokens」在一个或两个每日时段内计费——缓存命中输入、未命中输入、输出——分别按高峰单价与公布的空闲一档。余额始终是 DeepSeek 账户的余额。
+本包按用户自有的单价，为一次 Web 会话计价。它的 Host 半边把 `ui-billing` 这些字段声明为活字段，并在其中缓存两项来自提供方的读取：DeepSeek 账户余额与公布的价目表。浏览器半边渲染 composer dock 里的两个费用数字、每个已完成轮次 tail 里的费用胶囊，以及 Plugins 页上的「计费」页。一条路由就是一对 `provider/model`，按「元 / 百万 tokens」在最多两个每日时段内计费——缓存命中输入、未命中输入、输出——按高峰单价或公布的空闲一档。余额是 DeepSeek 账户的余额。
 
 ## 目录
 
@@ -49,15 +49,15 @@ Host 会按 `pricingUrl`（默认是官方中文文档页）读取公布价，�
 
 ### 费用显示
 
-composer 的环境 dock 承载本会话费用与余额两个数字：`conversation.composer.dock` 是 ui-conversation 声明的、composer 卡片下方环境条目的 list，官方统计行本身就是其中一个条目，因此这两个数字作为**另一个条目**与它并列，而不是插进它内部。两个数字都是纯金额（`¥16.82` 与 `¥15.96`，用金币与钱包字形区分；算不出时就是一个裸的 `-`）；它们靠无障碍名与 hover 提示说明自己是什么，而不是靠可见文字。会话合计累积 `tokenUsage` 投影——整份持久日志，而不是已加载窗口——按运行总量每次增长时生效的路由计价，这正是让会话中途换模型能被正确切分的原因。
+composer 的环境 dock 承载本会话费用与余额两个数字：`conversation.composer.dock` 是 ui-conversation 声明的、composer 卡片下方环境条目的 list，官方统计行本身就是其中一个条目，因此这两个数字作为**另一个条目**与它并列，而不是插进它内部。它们站在那一行**之后**——依据 list 自己的显示次序，而不是插件碰巧装配的先后——并且读在那一行的字号档位上，也就是它那些胶囊所用的「次级再小一像素」，因为 dock 自身不声明任何字号档位。两个数字都是纯金额（`¥16.82` 与 `¥15.96`，用金币与钱包字形区分；算不出时就是一个裸的 `-`）；它们靠无障碍名与 hover 提示说明自己是什么，而不是靠可见文字。会话合计累积 `tokenUsage` 投影——整份持久日志，而不是已加载窗口——按运行总量每次增长时生效的路由计价，这正是让会话中途换模型能被正确切分的原因。
 
-每个已完成的轮次在它自己的 tail 里带上费用胶囊，经由 `conversation.chat.turnTail`——ui-chat 声明的、位于该轮次操作条**之前**的特性贡献 list，它的拥有者份额正是该轮次、收尾序号与文件打开器。它显示 `费用 ¥0.42`，点开是该轮次的明细：一行一条路由，总额取自该轮次的持久账目，归属则来自每条已加载尝试**实际被计费的那条路由**。同时产出了文件改动的轮次两个 tail 条目都在——官方文件行与这个数字——因为 tail 是 list，彼此不抢占。有三种情况不带数字，对话框会说明是哪一种：
+每个已完成的轮次在它自己的 tail 里带上费用胶囊，经由 `conversation.chat.turnTail`——ui-chat 声明的、位于该轮次操作条**之前**的特性贡献 list，它的拥有者份额正是该轮次、收尾序号与文件打开器。它显示 `费用 ¥0.42`，点开是该轮次的明细：一行，对应本轮持久账目点名的那条路由，按该轮次收尾时生效的价格时段计费。同时产出了文件改动的轮次两个 tail 条目都在——官方文件行与这个数字——因为 tail 是 list，彼此不抢占。有三种情况不带数字，对话框会说明是哪一种：
 
 - 该轮次自身的账目缺失（事件已被分页移出、某次尝试从未结算）——与它自己那个「用量」胶囊的取舍完全一致：会话合计是整场会话的数，绝不拿来顶替某一轮；
-- 账目点了多条路由，而这些尝试一条都不在已加载窗口里，拆分无从谈起；对话框会点名这些无法归属的路由，而不是把整份合计在每条路由上各记一遍；
+- 账目点了多条路由——换了模型重试、或中途切换了路由的轮次——而已加载的任何东西都没有说明哪次尝试跑在哪条路由上，拆分无从谈起；对话框会点名这些无法归属的路由，而不是把整份合计在每条路由上各记一遍；
 - 它跑过的某条路由没有配单价，对话框会把它标为未定价。
 
-被中断的轮次同样保留它的 tail：没有收尾消息就没有可复制、可分支的目标，但账目与费用胶囊正是这个 tail 存在的理由。尚未结束的轮次根本没有 tail——官方的收尾节点在该轮次结束时才出现——因此最新一条回答要等那一轮结算后才带上费用。
+被中断的轮次同样保留它的 tail：没有收尾消息就没有可复制、可分支的目标，但账目与费用胶囊正是这个 tail 存在的理由。这个胶囊引出它下方那一行操作，因此跟随那一行自己的显隐规则：操作行只在 hover 时才显示的轮次，胶囊在此之前也一并隐藏；而被中断的轮次根本不带显隐属性，费用始终常驻。尚未结束的轮次根本没有 tail——官方的收尾节点在该轮次结束时才出现——因此最新一条回答要等那一轮结算后才带上费用。
 
 这里不发起任何模型请求，也不写入任何会话事件：胶囊只是对提供方已经上报的用量做只读投影。
 
@@ -109,13 +109,13 @@ officialRequest: null
 
 ### 费用折叠
 
-`tokenUsage` 是一个运行总量，两次读取之间的增量恰好就是某条路由被计费的部分，因此会话折叠为每次观察到的增长记录一段，并按各自的路由计价。编辑单价会重算每一段，切换模型会开始新的一段；两者都不会丢失历史。轮次折叠从持久的 turn-tail 账目出发——与官方「本轮用量」对话框所显示的同一份证据——按每条已加载尝试被计费的那条路由归属；剩余部分（被重试的尝试，或消息已离开窗口的尝试）按最后一条路由的单价计入，使计价总额与提供方上报的 tokens 一致。账目已不在已加载窗口内的轮次不显示数字；绝不用会话投影顶替，因为把整场会话的数读成某一轮的费用本身就是错的。
+`tokenUsage` 是一个运行总量，两次读取之间的增量恰好就是某条路由被计费的部分，因此会话折叠为每次观察到的增长记录一段，并按各自的路由计价。编辑单价会重算每一段，切换模型会开始新的一段；两者都不会丢失历史。轮次折叠从持久的 turn-tail 账目出发——与官方「本轮用量」对话框所显示的同一份证据——在账目点名的那一条路由下计价，时段取该轮次收尾时生效的那一档。账目点名多条路由的轮次不出数字：这份载荷只有一份按桶分组的合计加上被计费的路由清单，而已加载的 Chat 行只带每次尝试的用量与结算时刻、不带服务它的那条路由，因此这份合计无法落到其中任何一条上。绝不用会话投影顶替，因为把整场会话的数读成某一轮的费用本身就是错的。
 
-两个折叠还会按每一段**发生时所处的价格时段**计费。会话折叠给每次观察到的增长打上观察时刻，也就是提供方在这些 tokens 产生时正在计价的时段；轮次折叠给每条尝试打上它自己那条结算消息所带的时间，而没有时间的尝试根本不算证据。只公布一个价格的路由不按时段拆分，因为两档的数字本来相同。
+两个折叠还会按每一段**发生时所处的价格时段**计费。会话折叠给每次观察到的增长打上观察时刻，也就是提供方在这些 tokens 产生时正在计价的时段；轮次折叠把整轮放在它收尾的时刻，那是它自己的账目唯一带有的时刻。只公布一个价格的路由不按时段拆分，因为两档的数字本来相同。
 
 ### 注册
 
-三个界面，卸载时各自还原：`plugins.row.config`（计费配置页，键为 `@deepseek-ai/dsh-client-ui-billing#ui-billing`——本包在 Plugins 页上自己那一行的配置）、`conversation.composer.dock`（composer 环境 dock 里的本会话费用与余额两个数字），以及 `conversation.chat.turnTail`（已完成轮次 tail 里的每轮费用胶囊）。该页正是配置契约里的「自定义页」情形：Plugins 页拥有该行条目的 form 并交给页面，因此页面把编辑暂存、由一次保存通过 `form.mutate` 写出全部改动；而单价那些行——一张以「路由 × 价格时段」为键的映射、每格一个字段——仍由本包自绘控件承载，这是共享的标量字段套件表达不了的。两个数字座位都是各自所属包声明的 list 槽；拥有者份额以**摊平**方式到达条目，因此轮次胶囊直接读 `turn`，与官方交付文件条目是同一种读法。组件一律按槽的各份份额声明 props——`PropsRuntime`（拥有者份额与会话座位）、本插件面的 `InjectFace`、以及 `PropsLocale`——绝不手写成员清单。
+三个界面，卸载时各自还原：`plugins.item`（计费配置页，以条目 id `ui-billing` 注册，作为 Plugins 页的插件卡片之一列出）、`conversation.composer.dock`（composer 环境 dock 里的本会话费用与余额两个数字，位于官方统计行之后），以及 `conversation.chat.turnTail`（已完成轮次 tail 里的每轮费用胶囊）。该页正是配置契约里的「自定义页」情形：Plugins 页拥有该条目的 form 并交给页面，因此页面把编辑暂存、由一次保存通过 `form.mutate` 写出全部改动；而单价那些行——一张以「路由 × 价格时段」为键的映射、每格一个字段——仍由本包自绘控件承载，这是共享的标量字段套件表达不了的。插件卡片正是这个页面能被抵达的座位：行自己的页面需要声明该行的 bundle 行，而本插件的行属于随附的 web bundle，作为一个内置 profile bundle 被该页排除在列表之外。卡片在该条目被 Host 服务期间才出现，与随附插件自带的那些设置页完全一致。两个数字座位都是各自所属包声明的 list 槽；拥有者份额以**摊平**方式到达条目，因此轮次胶囊直接读 `turn`，与官方交付文件条目是同一种读法。组件一律按槽的各份份额声明 props——`PropsRuntime`（拥有者份额与会话座位）、本插件面的 `InjectFace`、以及 `PropsLocale`——绝不手写成员清单。
 
 计费页为「用户层确实配置过」「适配器当前已注册」或「部署层 profile 里带模型」（官方提供方就是这一类）的提供方各给一张卡片；三者都不占的目录条目没有可定价的东西，就不列出。每张卡片的模型来自那份 profile，模型列表收在该卡片自己的编辑控件之后；任何被某条已存单价行或本页刚输入的路由点名的提供方同样保留卡片，因此提供方消失的路由仍然可编辑、可清除。
 
@@ -134,54 +134,54 @@ officialRequest: null
 - [dsh-settings](../../settings/settings/README.zh.md) — Host 半边写入、页面所有者再转交给页面的配置服务。
 - [dsh-web](../../web/web/README.zh.md) — Host 读取公布价页面所用的网页读取能力。
 - [ui-settings](../ui-settings/README.zh.md) — 页面所有者据以读取条目的共享配置 form。
-- [ui-plugin-manager](../ui-plugin-manager/README.zh.md) — Plugins 页：本包页面注册进它的 `plugins.row.config` 槽，并遵循它的自定义页契约。
+- [ui-plugin-manager](../ui-plugin-manager/README.zh.md) — Plugins 页：本包页面注册进它的 `plugins.item` 槽，并遵循它的自定义页契约。
 - [ui-primitives](../ui-primitives/README.zh.md) — 页面用于承载自绘控件的共享设置表单外框。
 - [ui-chat](../ui-chat/README.zh.md) — 本包所扩展的胶囊、对话框与 turn-tail 链。
 
 -----
 
 <a id="model-experience"></a>
-## Model Experience
+## 模型体验
 
-None, as both halves render and price facts the providers already reported for a human, and neither registers a prompt, tool schema, model call, or session event.
+无：两个半边都只是把人已经由提供方上报的事实渲染并计价，既不注册提示词、工具 schema、模型调用，也不注册会话事件。
 
-#### KV Cache effect
+#### KV Cache 影响
 
-None; the package never assembles or sends a provider request.
+无；本包从不组装或发出任何提供方请求。
 
-## Known Limitations and Deferred Work
+## 已知限制与后续工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
 
-These limits define the current cost display. They are current package constraints, not a general billing comparison or a task backlog.
+这些限制界定了当前这份费用显示。它们是本包当前的约束，而不是一份通用计费比较，也不是任务清单。
 
-- **A Turn with incomplete accounting shows no cost** — the durable per-Turn accounting is all-or-nothing, so a Turn whose evidence is incomplete (its events paged out, an attempt that never settled) renders no figure rather than a wider session number. An old Turn can therefore read as costless while its answer is still on screen, which is the same abstention the shipped Turn-usage pill makes beside it.
-- **A Turn that ran on several routes without a loaded attempt shows no cost** — attribution needs the route each attempt was billed on, so a Turn whose attempts all left the window cannot be split; the pill withholds the figure and the dialog names the routes. One named route is still priced, because every attempt ran there.
-- **A retried attempt is charged at the route of the attempt the window kept** — the turn fold reads route attribution from the loaded window, so a Turn that retried on another route is charged for the attempts that survived there, with any remainder at the last of them. The priced total stays equal to the tokens the provider reported; the split between two routes of one retried Turn is approximate.
-- **The session total is attributed from the browser's first sight** — the running total a page first observes is priced under the route active then, because the routes of everything before it are not in the evidence a browser can read; only later growth is split per route. A reload mid-session therefore re-reads the whole total under the route in use at that moment.
-- **No figures appear before the shipped row does** — both composer figures ride ui-chat's stats row, which renders once the session has a step or billed tokens, so a brand-new session shows no balance until its first Turn. The per-Turn figure appears when that Turn closes, since the row itself is the shipped tail node's.
-- **Cache writes are charged as uncached input** — the three configured rates match how the DeepSeek adapters report usage, where a cache write arrives as prompt input. A provider that reports writes in their own bucket is charged that bucket's tokens at its cache-miss rate.
-- **跨越价格边界的一段只按一档计费** — 证据是这一段自己的时刻，而不是逐 token 的时间戳：会话折叠取观察时刻，轮次折叠取尝试结算的时刻。因此只有尝试分别落在边界两侧时，跨过北京时间 12:00 或 18:00 的轮次才会被拆开，而一次跨越边界的长尝试按它结束时生效的那一档计费。
+- **账目不完整的轮次不显示费用** —— 每一轮的持久账目是全有或全无：证据不全（事件已被分页移出、某次尝试从未结算）的轮次宁可不出数字，也不拿更大的会话数字顶替。因此一个旧轮次可能在它的回答仍在屏幕上时读作「无费用」，这与它旁边官方那个「本轮用量」胶囊的取舍完全一致。
+- **跑过多条路由的轮次不显示费用** —— 换了模型重试、或中途切换了路由的轮次，账目只有一份合计加上被计费的路由清单，而已加载的任何东西都没有说明哪次尝试跑在哪条路由上：胶囊因此不出数字，由对话框点名这些路由。账目只点名一条路由的轮次是精确计价的，而这正是单一提供方上普通会话的每一轮。
+- **跨越价格边界的轮次只按一档计费** —— 轮次自己的收尾时刻是它账目上唯一带有的时刻，因此跨过北京时间 12:00 或 18:00 的轮次按它收尾时生效的那一档计费。
+- **会话合计从浏览器首次看到时开始归属** —— 页面首次观察到的运行总量按当时生效的路由计价，因为在那之前的一切所走的路由并不在浏览器能读到的证据里；只有此后的增长才按路由拆分。因此会话中途刷新会按那一刻正在使用的路由重读整份总量。
+- **官方统计行出现之前不显示任何数字** —— composer 的两个数字都搭在 ui-chat 的统计行上，而该行在会话有了步骤或已计费 tokens 之后才渲染，因此全新会话要等它的第一轮才显示余额。每轮数字在该轮次收尾时出现，因为那一行本身属于官方的 tail 节点。
+- **缓存写入按未命中输入计费** —— 三个可配单价的划分方式与 DeepSeek 适配器上报用量的方式一致：缓存写入是以提示输入的形式到达的。把写入单独作为一档上报的提供方，其该档 tokens 会按它的缓存未命中单价计费。
+- **跨越价格边界的一段只按一档计费** —— 证据是这一段自己的时刻，而不是逐 token 的时间戳：会话折叠取它观察到的时刻，轮次折叠取该轮次收尾的时刻。因此一次跨越边界的长请求按它结束时生效的那一档计费。
 - **公布价来自一张文档页面** — DeepSeek 没有价格接口，Host 解析的是 `pricingUrl` 上的表格；该读取失败或页面改版时，给官方路由计价的仍是出厂快照。提供方自上次成功读取后调整的价格，要等下一次自动读取才会进入会话，最多相隔 `pricingRefreshIntervalMs`，或由页面上的「立即读取」立刻取回。
 - **按另一种币种计价的页面会被拒绝** — 表格只陈述一种币种的数字；当它与本文档计价所用币种不一致时，该次读取被丢弃并记录具名原因，因为混用会让每条官方路由都按汇率错价。改 `currency` 时请把 `pricingUrl` 指向相应语言的版本。
 - **只填了部分字段的路由，其余字段按 0 计费** — 留空的字段从不写入，因此手工填写时只给了一个数字、其余留空的行，其余字段取 schema 的 0。请把这条路由实际计费的数字都填上，或清除该行回落到公布价。
-- **The balance is always the DeepSeek account's** — by design: the page compares spend against the one account the API can report. A deployment whose sessions never use the official provider still shows this balance, and the Host read is the only request this package makes.
+- **余额始终是 DeepSeek 账户的余额** —— 这是设计使然：页面拿花销与 API 唯一能上报的那个账户相比。会话从不使用官方提供方的部署同样显示这个余额，而 Host 的这两次读取就是本包发出的全部请求。
 
 <a id="dev-note"></a>
 ### 开发备注
 
 <details>
-<summary>Working context for maintainers — click to expand</summary>
+<summary>给维护者的工作上下文——点开查看</summary>
 
 - 每轮节点数据只存在于已物化的 Chat 节点 store 里，而不在官方统计行读取的那份 legacy 兼容切片里。
-- 费用数字是一个 tail 贡献（`conversation.chat.turnTail`）——ui-chat 声明的、位于已完成轮次操作条**之前**的特性贡献 list；正是「list」这一点保住了它：官方交付文件条目与这个数字能在同一轮次共存。每条尝试的节点 kind 是 `assistant-step`，其 `finalNode.provenance` 与 `finalNode.time` 就是该次尝试被计费的路由与时刻。
+- 费用数字是一个 tail 贡献（`conversation.chat.turnTail`）——ui-chat 声明的、位于已完成轮次操作条**之前**的特性贡献 list；正是「list」这一点保住了它：官方交付文件条目与这个数字能在同一轮次共存。胶囊只读 `turn-tail` 那份载荷——它的 `tokenUsage` 与 `time`；没有任何 Chat 行带有某次尝试被计费的路由，这正是「账目归属到多条路由的轮次宁可不出数字、也不靠猜拆分」的原因。
 - 价格表夹具就是线上文档页实际提供的那张表格，逐字录下，因此 `parsePricePage` 是针对它真正会遇到的行合并、脚注标记与单位后缀来规定的。默认用中文版，因为它陈述的币种就是本包默认币种；英文版在样张里充当「币种不符被拒」的用例。
 - `BillingTranslate` 保持本地声明，而 props 从 `PropsLocale` 派生：框架在合并后的 `LocaleNamespaceMap` 上给出的座位同时接受本字典的键与共享的通用键，它可以赋给更窄的本地别名，反向则不行。一包两 face 的布局让 `src/settings.ts` 在两个 leaf 中都参与编译——Client leaf 把它列进 `include`——因为 Client 配置不允许进入 split 项目的 Host leaf。
 - 配置条目（`ui-billing`）与文案字典（`billing`）分开命名：两者共用一个标识符会把 scope 绑到字典上，于是 Host 明明在提供正确取值，而每个界面都渲染自己的「不可用」状态。
-- 本包处在逐文件 100% 覆盖率门内，只有一条分支带 `/* v8 ignore */`：轮次折叠里「最后一行存在」的判空——上面的循环为每条尝试都加了一行，而没有尝试的轮次在到达该处之前就已返回。发布标签要等这道门与 `pnpm run doc-sync` 一起转绿；两次发布之间，一次改动只需过包内样张、两个 TypeScript face 与 linter——把注意力花在审查上，比追最后几个百分点更值。
+- 本包处在逐文件 100% 覆盖率门内，并有四处带 `/* v8 ignore */`：页面的保存与读取处理函数对「外框根本不会交给它的 form」设的守卫、它从自己拼出的键里读路由的那一处，以及保存路径上「操作列表为空」的守卫——外框自己的 dirty 标记已经排除了这种情况。发布标签要等这道门与 `pnpm run doc-sync` 一起转绿；两次发布之间，一次改动只需过包内样张、两个 TypeScript face 与 linter——把注意力花在审查上，比追最后几个百分点更值。
 - 页面要求的这次读取走 settings 写入，而不是调进 Host：浏览器自己读不了那张文档页（该来源不为它下发许可），本包也没有可调用的 Remote 命名空间，于是命名空间里的 `officialRequest` 字段就是两端共用的那条通道。客户端写下它请求的时刻，Host 监听命名空间、去取页面，并在该次读取结算时清掉字段。这个字段「不存在」与「为 null」对每个读取方都是同一件事，因为命名空间 schema 里的联合类型两者都不会写进存量文档。
 
 </details>
 
-**Runtime invariant:** No companion is published. The package's two halves own no shared in-process state: the Host half owns the live field declarations and its refresh chain, and the browser half owns three slot registrations, each proven removed by the HMR-safety spec.
+**运行时不变式：** 未发布伴随包。本包两个半边不共享任何进程内状态：Host 半边拥有活字段声明与它的刷新链，浏览器半边拥有三个插槽注册，每一个都由 HMR 安全样张证明可被移除。

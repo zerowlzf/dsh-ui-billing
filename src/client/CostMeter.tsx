@@ -1,8 +1,8 @@
 // Session billing figures for the composer: one cost pill for the session's
 // accumulated spend and one balance pill for the DeepSeek account, seated by
 // `conversation.composer.dock` — the ambient list under the composer card the
-// shipped stats row is seated on as well, so the figures stand beside it rather
-// than inside another package's row.
+// shipped stats row is seated on as well, so the figures stand after it on the
+// same line rather than inside another package's row.
 //
 // The session cost is accumulated from the `tokenUsage` projection rather than
 // folded from the loaded window, because that projection is the whole durable

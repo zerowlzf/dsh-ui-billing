@@ -38,7 +38,7 @@ import type {} from '@deepseek-ai/dsh-web'
 import { DEFAULT_API_KEY_ENV, DEFAULT_BASE_URL, readBalance } from './account.ts'
 import { DEFAULT_PRICING_URL, readPrices, type PageFetcher } from './published-prices.ts'
 import {
-  BillingSettingsFields, DEFAULT_CURRENCY, NS,
+  BillingSettingsFields, NS,
   type BalanceSnapshot, type BillingSettings, type ModelRate, type PriceSnapshot,
   type PriceFailure, type ReadFailure,
 } from './settings.ts'
@@ -172,12 +172,14 @@ export function apply(ctx: Context, config: Config): void {
    *
    * A value is read where it is used rather than held, because a field is
    * replaced wholesale when the browser saves: a captured copy would price
-   * against rates the operator already changed.
+   * against rates the operator already changed. Every field resolves to a
+   * value — the loader fills the schema's defaults — so nothing here states a
+   * fallback of its own.
    * @returns the fields as the form resolves them.
    */
   const read = (): BillingSettings => ({
-    currency: config.currency.get() ?? DEFAULT_CURRENCY,
-    models: config.models.get() ?? {},
+    currency: config.currency.get(),
+    models: config.models.get(),
     cache: config.cache.get() ?? null,
     cacheError: config.cacheError.get() ?? null,
     official: config.official.get() ?? null,
@@ -199,7 +201,7 @@ export function apply(ctx: Context, config: Config): void {
     const result = await readBalance({
       baseURL: config.baseURL,
       apiKeyEnv: config.apiKeyEnv,
-      currency: config.currency.get() ?? DEFAULT_CURRENCY,
+      currency: config.currency.get(),
       timeoutMs: config.requestTimeoutMs,
     }, resolveKey)
     if (stopped) return
@@ -244,7 +246,7 @@ export function apply(ctx: Context, config: Config): void {
     const requested = read().officialRequest != null
     const result = await readPrices({
       url: config.pricingUrl,
-      currency: config.currency.get() ?? DEFAULT_CURRENCY,
+      currency: config.currency.get(),
       timeoutMs: config.requestTimeoutMs,
     }, fetchPage())
     if (stopped) return

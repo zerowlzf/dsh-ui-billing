@@ -1,16 +1,17 @@
-/* Billing configuration page on the Plugins page: an intro line, the read-only balance card, then one
-   card per configured provider. A card is closed by default and summarises the
-   models its rates apply to; the price fields appear behind its edit control.
-   Tokens match the shipped configuration pages (secondary text tier, alias borders
-   and surfaces). */
+/* Billing configuration page on the Plugins page: an intro line, the balance
+   reading, the published-price reading, then one section per configured
+   provider. A section is the hairline-separated block the Plugins page and the
+   shipped settings pages are built from — this page draws no surface of its own
+   inside them — and the fields wear the shared settings-field skin. */
 
 .page {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding-top: 4px;
   color: var(--dsw-alias-label-secondary);
   font-size: 13px;
-  line-height: 20px;
+  line-height: 1.5;
 }
 
 .intro {
@@ -19,27 +20,32 @@
 }
 
 .sectionTitle {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 1.5;
 }
 
 .rates {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .card {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-sizing: border-box;
-  padding: 12px 14px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-surface, transparent);
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+/* The column ends before the form's own save row, so the last section carries
+   no trailing rule under it. */
+.card:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .cardHead {
@@ -156,7 +162,7 @@
 .bandLabel {
   box-sizing: border-box;
   min-width: 60px;
-  padding-bottom: 5px;
+  padding-bottom: 7px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 16px;
@@ -176,25 +182,32 @@
   line-height: 16px;
 }
 
+/* One rate field, wearing the shared settings-field skin so a rate reads like
+   every other number this deployment is configured with. The width is this
+   page's own: a per-million-token rate is a short figure, and a row holds six
+   of them. */
 .input {
   box-sizing: border-box;
   width: 92px;
-  padding: 4px 8px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
+  height: 30px;
+  padding: 0 8px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: 8px;
-  background: transparent;
+  background: var(--dsw-alias-bg-layer-3);
   color: var(--dsw-alias-label-primary);
   font: inherit;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 .input:focus-visible {
   outline: none;
-  border-color: var(--dsw-alias-border-l1);
+  border-color: var(--dsw-alias-brand-primary);
 }
 
 .input:disabled {
   color: var(--dsw-alias-label-tertiary);
+  cursor: default;
 }
 
 .actions {
