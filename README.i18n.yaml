@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-billing/README.md
-README.md: c436faa25426d2632db7cef73a2d5e612864ae18
-README.zh.md: 63e79d3400fe333131540f645a37bcdcc437dc63
+/:
+  en: 4fdf37ff5afa5a15
+  zh: af924149e6698bfc
+/deepseek-ai-dsh-client-ui-billing:
+  en: 5364e8bf01a1532c
+  zh: f122a3355015bede
+/deepseek-ai-dsh-client-ui-billing/summary:
+  en: dd8f2f0c8ec8f120
+  zh: cabfcacccca1acf9
+/deepseek-ai-dsh-client-ui-billing/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: ffab54373e9e61f0
+/deepseek-ai-dsh-client-ui-billing/use-this-package:
+  en: 5a537d4fe7eb7567
+  zh: 205e415b372ef23b
+/deepseek-ai-dsh-client-ui-billing/use-this-package/rates:
+  en: 347602570809c755
+  zh: 4c95c39115f145d4
+/deepseek-ai-dsh-client-ui-billing/use-this-package/rate-editing:
+  en: 305bf473bef416e6
+  zh: e69927c3722e8fab
+/deepseek-ai-dsh-client-ui-billing/use-this-package/cost-display:
+  en: 23ce56c7fd184d20
+  zh: 2b8512b770ba3e01
+/deepseek-ai-dsh-client-ui-billing/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 42b15ac6321706aa
+/deepseek-ai-dsh-client-ui-billing/understand-the-implementation/the-live-configuration-fields:
+  en: b2d89b4d05014df0
+  zh: 9f50083bf55f9ce3
+/deepseek-ai-dsh-client-ui-billing/understand-the-implementation/cost-folds:
+  en: f40430447840009f
+  zh: 8946e049e4db939d
+/deepseek-ai-dsh-client-ui-billing/understand-the-implementation/registration:
+  en: 44ee038d5d63c718
+  zh: a30b83799e11868f
+/deepseek-ai-dsh-client-ui-billing/further-exploration:
+  en: 5edb09c114e3cb4b
+  zh: 7c03f7c9961f50fb
+/deepseek-ai-dsh-client-ui-billing/model-experience:
+  en: 8e46edeb918daca9
+  zh: 69781b957aa6e19c
+/deepseek-ai-dsh-client-ui-billing/model-experience/kv-cache-effect:
+  en: 0774980d3e7e63ae
+  zh: f2d86507c93740b6
+/deepseek-ai-dsh-client-ui-billing/known-limitations-and-deferred-work:
+  en: 63c9a8e36b33b7d0
+  zh: a47deb51e38f201d
+/deepseek-ai-dsh-client-ui-billing/known-limitations-and-deferred-work/dev-note:
+  en: 9cb7015c1a1c2c4e
+  zh: 624bcb9daf030a25
