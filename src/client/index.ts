@@ -43,7 +43,7 @@ import type { BillingPageInjected, BillingPillsInjected } from './face.ts'
 import { LOCALE_NS, en, zh, type BillingKey } from './locales.ts'
 import { providerRoutes, type ProviderRouteGroup } from './routes.ts'
 import { SessionCostMeter } from './CostMeter.tsx'
-import { TurnCostMeter } from './TurnCostMeter.tsx'
+import { TurnCostMeter, TurnCostMeterTail } from './TurnCostMeter.tsx'
 import { BillingPage } from './BillingPage.tsx'
 
 export type { BillingPageProps } from './BillingPage.tsx'
@@ -171,17 +171,29 @@ export function apply(ctx: ClientContext): void {
     inject: injectedPills,
   }, SessionCostMeter))
 
-  // A completed Turn's tail is the seat: it is the list of feature
-  // contributions before that Turn's action row, and its owner share already
-  // carries the Turn, the closing sequence, and the file opener this pill
-  // prices and opens. The shipped Turn-usage and Turn-time triggers sit in the
-  // action row below, so the cost reading stays a tail contribution rather than
-  // a second action.
+  // A completed Turn's action row owns the line this reading belongs to: the
+  // end-info list seats it after the shipped Turn-usage trigger and before the
+  // row's clock, so the figure a Turn's accounting states reads beside the
+  // usage figure it belongs with instead of on a line of its own. Sharing the
+  // slot's owner share with the tail is what lets one component price either
+  // seat: the Turn, its closing sequence, and the file opener.
+  ctx.slots.inject('conversation.chat.turnEndInfo', () => ctx.slots.register({
+    name: 'conversation.chat.turnEndInfo',
+    id: 'billing',
+    order: 0,
+    locale: LOCALE_NS,
+    inject: injectedPills,
+  }, TurnCostMeter))
+
+  // A Turn interrupted before any finalized text renders no action row at all —
+  // no copy, no branch, no usage trigger, no clock — so the row seat has nothing
+  // to join and the figure would vanish. The tail seat carries it for that case
+  // alone: every Turn an action row already shows leaves this seat empty.
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail',
     id: 'billing',
     order: 0,
     locale: LOCALE_NS,
     inject: injectedPills,
-  }, TurnCostMeter))
+  }, TurnCostMeterTail))
 }

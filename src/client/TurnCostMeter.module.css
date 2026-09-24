@@ -1,16 +1,14 @@
-/* Turn-cost pill in a completed turn's tail, above the shipped action row.
-   The pill reuses that row's reading geometry — the 28px pill, its 6px/8px
-   padding, and the 12/24 tier its Turn-usage and Turn-time triggers read at —
-   so the three read as one cluster a line apart; the dialog wears the shared
-   stat-dialog.module.css skin. The tail's own 16px gap spaces it, so this
-   module carries no margins of its own.
+/* Turn-cost reading in a completed turn's action row, and in the tail of a turn
+   that has one. The pill reuses that row's reading geometry — the 28px pill, its
+   6px/8px padding, and the 12/24 tier its Turn-usage and Turn-time triggers read
+   at — so the figures sit in one cluster; the dialog wears the shared
+   stat-dialog.module.css skin. The row's own 8px gap spaces it there and the
+   tail's 16px gap spaces it in the no-action-row case, so this module carries no
+   margins of its own.
 
-   A tail contribution follows the row it introduces: a turn whose action row is
-   revealed on hover only (every turn but the latest one that ends in a reply)
-   hides this pill by the same rule, so the tail never shows a lone reading with
-   the row beneath it invisible. A turn with no closing message has no action row
-   and no reveal attribute: its cost stays resident, which is the case this seat
-   exists for. */
+   Nothing here gates visibility: inside the row the whole cluster already
+   follows that row's reveal, and the tail seat renders only for a turn whose
+   action row does not exist. */
 
 .root {
   display: inline-flex;
@@ -51,21 +49,6 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* The reveal gate the shipped action row uses, on the attribute the tail
-   carries: opacity keeps the tail's height stable, and a device without hover
-   keeps every reading visible. */
-@media (hover: hover) {
-  [data-actions-reveal='hover'] .root {
-    opacity: 0;
-    transition: opacity 80ms ease;
-  }
-
-  [data-actions-reveal='hover']:hover .root,
-  [data-actions-reveal='hover']:focus-within .root {
-    opacity: 1;
-  }
 }
 
 /* Narrow viewport: the pill collapses to its bare icon with the sibling

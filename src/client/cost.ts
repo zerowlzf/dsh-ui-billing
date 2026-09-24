@@ -62,6 +62,16 @@ export interface TurnBuckets {
   readonly cacheWriteTokens: number
 }
 
+/** One billed attempt of one turn, as the loaded window proves it. */
+export interface TurnAttempt {
+  /** `provider/model` that served the attempt. */
+  readonly route: string
+  /** Epoch milliseconds the attempt settled; it selects the price window. */
+  readonly at: number
+  /** Buckets the provider reported for the attempt. */
+  readonly buckets: TurnBuckets
+}
+
 /** One charge a turn incurred: a route, the window it was billed in, and its buckets. */
 export interface TurnRouteUsage {
   readonly route: string
@@ -161,36 +171,104 @@ export function chargeWindow(route: string, at: number, rates: RateTable): Price
 }
 
 /**
- * Place one turn's exact accounting on the routes it was billed for.
+ * Split one turn's exact accounting across the charges it incurred.
  *
  * The turn-tail accounting carries one aggregate per bucket plus the set of
- * routes that billed it, and nothing per attempt: the loaded Chat nodes carry
- * each attempt's usage and settle time, but not the route that served it, and a
- * route guessed from a retry record names a provider without a model. So the
- * aggregate is priced only when a single route is named — every billed attempt
- * ran there, and the figure is exact — and a turn that ran on several routes
- * yields no row rather than stating the aggregate under each of them, which
- * would charge the turn once per route. The caller names the routes it could
- * not attribute while no row is returned.
+ * routes that billed it, and the loaded Chat rows carry each attempt's own
+ * usage, its settle time, and the route it was billed on. Attempts on the same
+ * route and in the same price window are one row, summed; when they account for
+ * the same total as the aggregate, those rows are exact per charge. A retried
+ * attempt makes the aggregate larger than the surviving samples; that
+ * difference is charged at the last row's rate, which keeps the priced total
+ * equal to the tokens the provider reported.
  *
  * A route is split by window only when its rates state one, because a route
  * with a single published price charges the same figure at every hour and two
  * rows would state that once each.
+ *
+ * Without attempts the aggregate is all that is left, and it can be priced only
+ * when a single route is named: every billed attempt ran there. Several named
+ * routes with no surviving attempt cannot be split, and stating the aggregate
+ * under each of them would charge the turn once per route, so the fold declines
+ * and returns no rows, leaving the caller to name the routes it could not
+ * attribute.
  * @param usage - the turn's exact accounting.
+ * @param attempts - loaded attempts of the turn, in order.
  * @param rates - configured rates by route, which say whether a route prices by window.
- * @param at - epoch milliseconds the turn closed, which selects the price window.
- * @returns one row for a turn its accounting attributes to one route, otherwise no rows.
+ * @param at - epoch milliseconds the turn closed, used when no attempt time survives.
+ * @returns one row per charge, or no rows when the turn cannot be attributed to the routes its own accounting names.
  */
 export function turnRouteUsage(
   usage: TurnTokenUsage,
+  attempts: readonly TurnAttempt[],
   rates: RateTable,
   at: number,
 ): TurnRouteUsage[] {
-  const named = turnRoutes(usage)
-  const [only] = named
-  return named.length === 1 && only !== undefined
-    ? [{ route: only, window: chargeWindow(only, at, rates), buckets: turnBuckets(usage) }]
-    : []
+  if (attempts.length === 0) {
+    const named = turnRoutes(usage)
+    const [only] = named
+    return named.length === 1 && only !== undefined
+      ? [{ route: only, window: chargeWindow(only, at, rates), buckets: turnBuckets(usage) }]
+      : []
+  }
+  // One row per charge, in the order they were first billed: a Turn's steps on
+  // one route in one window are one line of its bill, and a Turn that switched
+  // models or crossed a price boundary gets a line for each.
+  const byCharge = new Map<string, TurnRouteUsage>()
+  for (const attempt of attempts) {
+    const window = chargeWindow(attempt.route, attempt.at, rates)
+    const key = `${attempt.route}\u0000${window}`
+    const previous = byCharge.get(key)
+    byCharge.set(key, {
+      route: attempt.route,
+      window,
+      buckets: previous === undefined ? attempt.buckets : addBuckets(previous.buckets, attempt.buckets),
+    })
+  }
+  const rows = [...byCharge.values()]
+  const summed = rows.reduce<TurnBuckets>((total, row) => addBuckets(total, row.buckets), emptyBuckets())
+  const remainder = subtractBuckets(turnBuckets(usage), summed)
+  if (!isEmptyTurnBuckets(remainder)) {
+    const last = rows[rows.length - 1]
+    /* v8 ignore next -- every attempt above added a row, and a turn with none returned before this point. */
+    if (last !== undefined) {
+      rows[rows.length - 1] = { ...last, buckets: addBuckets(last.buckets, remainder) }
+    }
+  }
+  return rows
+}
+
+/** No billed tokens, the identity of {@link addBuckets}. */
+function emptyBuckets(): TurnBuckets {
+  return { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
+}
+
+/** Bucket-wise sum. */
+function addBuckets(left: TurnBuckets, right: TurnBuckets): TurnBuckets {
+  return {
+    uncachedInputTokens: left.uncachedInputTokens + right.uncachedInputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    cacheReadTokens: left.cacheReadTokens + right.cacheReadTokens,
+    cacheWriteTokens: left.cacheWriteTokens + right.cacheWriteTokens,
+  }
+}
+
+/** Bucket-wise difference; a negative result means the two sides disagree. */
+function subtractBuckets(left: TurnBuckets, right: TurnBuckets): TurnBuckets {
+  return {
+    uncachedInputTokens: left.uncachedInputTokens - right.uncachedInputTokens,
+    outputTokens: left.outputTokens - right.outputTokens,
+    cacheReadTokens: left.cacheReadTokens - right.cacheReadTokens,
+    cacheWriteTokens: left.cacheWriteTokens - right.cacheWriteTokens,
+  }
+}
+
+/** Whether a bucket set carries no tokens. */
+function isEmptyTurnBuckets(buckets: TurnBuckets): boolean {
+  return buckets.uncachedInputTokens === 0
+    && buckets.outputTokens === 0
+    && buckets.cacheReadTokens === 0
+    && buckets.cacheWriteTokens === 0
 }
 
 /**

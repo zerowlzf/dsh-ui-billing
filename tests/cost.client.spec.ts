@@ -166,20 +166,78 @@ describe('turn routes', () => {
   }
 
   it('prices a turn under the single route its own accounting names', () => {
-    // The turn's close time is the only instant its evidence states, and it is
-    // what places the charge in a price window.
-    expect(turnRouteUsage(singleRoute, { 'a/m': BANDED }, PEAK_AT))
+    // With no loaded attempt to place, the close time is the only instant the
+    // evidence states, and it is what puts the charge in a price window.
+    expect(turnRouteUsage(singleRoute, [], { 'a/m': BANDED }, PEAK_AT))
       .toEqual([{ route: 'a/m', window: 'peak', buckets: turnBuckets(30, 5) }])
-    expect(turnRouteUsage(singleRoute, { 'a/m': BANDED }, OFF_PEAK_AT))
+    expect(turnRouteUsage(singleRoute, [], { 'a/m': BANDED }, OFF_PEAK_AT))
       .toEqual([{ route: 'a/m', window: 'offPeak', buckets: turnBuckets(30, 5) }])
   })
 
   it('keeps one row for a route that publishes a single price', () => {
-    expect(turnRouteUsage(singleRoute, { 'a/m': FLAT }, OFF_PEAK_AT))
+    expect(turnRouteUsage(singleRoute, [], { 'a/m': FLAT }, OFF_PEAK_AT))
       .toEqual([{ route: 'a/m', window: 'peak', buckets: turnBuckets(30, 5) }])
   })
 
-  it('declines a turn whose accounting names several routes', () => {
+  it('splits a turn that switched models into one row per charge', () => {
+    // Each attempt states its own route, usage, and settle time, so a turn that
+    // retried elsewhere is priced as the two charges it incurred.
+    const usage = {
+      uncachedInputTokens: 30, outputTokens: 5, totalTokens: 35,
+      routes: [{ provider: 'a', model: 'm' }, { provider: 'b', model: 'n' }],
+    }
+    expect(turnRouteUsage(usage, [
+      { route: 'a/m', at: PEAK_AT, buckets: turnBuckets(20, 5) },
+      { route: 'b/n', at: PEAK_AT, buckets: turnBuckets(10, 0) },
+    ], { 'a/m': FLAT, 'b/n': FLAT }, PEAK_AT)).toEqual([
+      { route: 'a/m', window: 'peak', buckets: turnBuckets(20, 5) },
+      { route: 'b/n', window: 'peak', buckets: turnBuckets(10, 0) },
+    ])
+  })
+
+  it('sums attempts on one route in one window into a single row', () => {
+    // One route billed twice in the same window is one line of the bill, and two
+    // rows would state that charge twice.
+    const usage = {
+      uncachedInputTokens: 20, outputTokens: 5, totalTokens: 25,
+      routes: [{ provider: 'a', model: 'm' }],
+    }
+    expect(turnRouteUsage(usage, [
+      { route: 'a/m', at: PEAK_AT, buckets: turnBuckets(15, 5) },
+      { route: 'a/m', at: PEAK_AT, buckets: turnBuckets(5, 0) },
+    ], { 'a/m': FLAT }, PEAK_AT))
+      .toEqual([{ route: 'a/m', window: 'peak', buckets: turnBuckets(20, 5) }])
+  })
+
+  it('splits one route by the price window each attempt settled in', () => {
+    const usage = {
+      uncachedInputTokens: 30, outputTokens: 0, totalTokens: 30,
+      routes: [{ provider: 'a', model: 'm' }],
+    }
+    expect(turnRouteUsage(usage, [
+      { route: 'a/m', at: OFF_PEAK_AT, buckets: turnBuckets(30, 0) },
+      { route: 'a/m', at: PEAK_AT, buckets: turnBuckets(0, 0) },
+    ], { 'a/m': BANDED }, PEAK_AT)).toEqual([
+      { route: 'a/m', window: 'offPeak', buckets: turnBuckets(30, 0) },
+      { route: 'a/m', window: 'peak', buckets: turnBuckets(0, 0) },
+    ])
+  })
+
+  it('charges a retried attempt the aggregate still counts at the last row rate', () => {
+    // The surviving samples can account for less than the turn's own aggregate —
+    // an attempt whose row paged out, or a retry the log kept only in the total.
+    // That difference stays charged, at the rate of the row that last billed.
+    const usage = {
+      uncachedInputTokens: 30, outputTokens: 0, totalTokens: 30,
+      routes: [{ provider: 'a', model: 'm' }],
+    }
+    expect(turnRouteUsage(usage, [
+      { route: 'a/m', at: PEAK_AT, buckets: turnBuckets(10, 0) },
+    ], { 'a/m': FLAT }, PEAK_AT))
+      .toEqual([{ route: 'a/m', window: 'peak', buckets: turnBuckets(30, 0) }])
+  })
+
+  it('declines a turn whose accounting names several routes and no attempt is loaded', () => {
     // Nothing loaded states which attempt ran on which route, so stating the
     // aggregate under each of them would charge the turn once per route: the
     // fold returns nothing and the caller names what it could not attribute.
@@ -188,12 +246,12 @@ describe('turn routes', () => {
       routes: [{ provider: 'a', model: 'm' }, { provider: 'b', model: 'n' }],
     }
     const rates = { 'a/m': FLAT, 'b/n': FLAT }
-    expect(turnRouteUsage(usage, rates, PEAK_AT)).toEqual([])
-    expect(turnCost(turnRouteUsage(usage, rates, PEAK_AT), rates).total).toBe(0)
+    expect(turnRouteUsage(usage, [], rates, PEAK_AT)).toEqual([])
+    expect(turnCost(turnRouteUsage(usage, [], rates, PEAK_AT), rates).total).toBe(0)
   })
 
   it('declines a turn whose accounting names no route', () => {
-    expect(turnRouteUsage({ uncachedInputTokens: 1, outputTokens: 1, totalTokens: 2 }, {}, PEAK_AT))
+    expect(turnRouteUsage({ uncachedInputTokens: 1, outputTokens: 1, totalTokens: 2 }, [], {}, PEAK_AT))
       .toEqual([])
   })
 

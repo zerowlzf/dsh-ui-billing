@@ -1,9 +1,9 @@
 /**
  * The billing figures' layout as CSS text. jsdom has no layout, so these read
  * the declarations that seat the composer figures on the shipped reading tier
- * after the stats row, keep the Turn pill on the geometry of the action row it
- * introduces, hide it behind that row's own reveal gate, and give both dialogs
- * the shipped stat-dialog surface.
+ * after the stats row, keep the Turn reading on the geometry of the action row
+ * it sits in, bring no visibility rule of their own, and give both dialogs the
+ * shipped stat-dialog surface.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -45,9 +45,9 @@ describe('composer figures layout', () => {
 
 describe('turn pill layout', () => {
   it('wears the geometry and tier of the shipped usage and time triggers', () => {
-    // The pill introduces the action row holding the shipped Turn-usage and
+    // The reading sits inside the action row holding the shipped Turn-usage and
     // Turn-time triggers: the same 28px pill, 6px/8px padding, rounding, and
-    // one-pixel-under-secondary reading, so the three read as one cluster.
+    // one-pixel-under-secondary reading, so the figures read as one cluster.
     const css = read('TurnCostMeter.module.css')
     expect(declarationsFrom(css, '.trigger')).toEqual(expect.arrayContaining([
       'height: calc(28px + var(--dsh-content-font-delta, 0px))',
@@ -69,19 +69,18 @@ describe('turn pill layout', () => {
     ]))
   })
 
-  it('follows the action row’s reveal gate on the attribute the tail carries', () => {
-    // A tail contribution introduces the row below it, so a row revealed on
-    // hover only must not leave this pill standing alone above an invisible row.
-    // Absence of the attribute — a turn with no closing message — keeps it
-    // resident, which is the case the tail seat exists for.
+  it('brings no visibility rule of its own', () => {
+    // Inside the action row the whole cluster already follows that row's reveal,
+    // and the tail seat renders only for a turn whose row does not exist. A
+    // second gate here would hide a reading the row is showing, or keep one
+    // resident where nothing else is.
     const css = read('TurnCostMeter.module.css')
-    const hover = /@media \(hover: hover\) \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? ''
-    expect(hover).toMatch(/\[data-actions-reveal='hover'\] \.root \{[^}]*opacity: 0/)
-    expect(hover).toMatch(/\[data-actions-reveal='hover'\]:hover \.root,[\s\S]*?opacity: 1/)
-    expect(hover).toMatch(/\[data-actions-reveal='hover'\]:focus-within \.root/)
-    // A device without hover keeps every reading visible, and the pill never
-    // disappears from the layout it shares with the row.
-    expect(hover).not.toContain('display: none')
+    expect(css).not.toContain('data-actions-reveal')
+    expect(css).not.toContain('opacity')
+    // The one element this module ever removes is the narrow-viewport label,
+    // which leaves the icon in place: the reading itself stays in the row.
+    expect(css.match(/display: none/gu)?.length).toBe(1)
+    expect(declarationsFrom(css, '.trigger .label')).toContain('display: none')
   })
 })
 

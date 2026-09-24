@@ -24,7 +24,7 @@ import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import { DEFAULT_CURRENCY, NS, type BillingSettings } from '../src/settings.ts'
 import { providerRoutes, type ProviderRouteGroup } from '../src/client/routes.ts'
 import { SessionCostMeter, currencyOf, freshness, groupSteps } from '../src/client/CostMeter.tsx'
-import { TurnCostMeter } from '../src/client/TurnCostMeter.tsx'
+import { TurnCostMeter, TurnCostMeterTail, attemptsOf } from '../src/client/TurnCostMeter.tsx'
 import { BillingPage, type BillingPageProps } from '../src/client/BillingPage.tsx'
 import type { BillingPageInjected, BillingPillsInjected } from '../src/client/face.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -544,11 +544,37 @@ describe('turn cost row', () => {
       },
     },
     {
-      // A row of another kind: the pill reads the turn-tail payload alone, and a
-      // node of another kind is skipped rather than inspected.
+      // A row of another kind: the reading reads the turn-tail payload and the
+      // assistant rows alone, and a node of another kind is skipped.
       key: 'tool-1', kind: 'tool-call', target: 'chat', anchorSeq: 2, location: { kind: 'session' },
       visibility: 'visible', id: 'tool-1',
       data: { turn: 1 },
+    },
+    {
+      key: 'assistant-1', kind: 'assistant-step', target: 'chat', anchorSeq: 2, location: { kind: 'session' },
+      visibility: 'visible', id: 'assistant-1',
+      data: {
+        turn: 1,
+        finalNode: {
+          usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+          time: AT,
+          providerMetadata: { provider: 'bai', model: 'glm-5.3-flash' },
+        },
+      },
+    },
+    {
+      // The same Turn's second attempt on another route: the loaded evidence for
+      // what a turn that switched models was billed.
+      key: 'assistant-2', kind: 'assistant-step', target: 'chat', anchorSeq: 4, location: { kind: 'session' },
+      visibility: 'visible', id: 'assistant-2',
+      data: {
+        turn: 1,
+        finalNode: {
+          usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
+          time: AT,
+          providerMetadata: { provider: 'x', model: 'other' },
+        },
+      },
     },
     {
       // A Turn that ran only on a route with no rate at all, official prices
@@ -562,6 +588,18 @@ describe('turn cost row', () => {
           uncachedInputTokens: 1_000_000, outputTokens: 0, totalTokens: 1_000_000,
           cacheReadTokens: 0, cacheWriteTokens: 0,
           routes: [{ provider: 'x', model: 'other' }],
+        },
+      },
+    },
+    {
+      key: 'assistant-3', kind: 'assistant-step', target: 'chat', anchorSeq: 6, location: { kind: 'session' },
+      visibility: 'visible', id: 'assistant-3',
+      data: {
+        turn: 3,
+        finalNode: {
+          usage: { inputTokens: 1_000_000, outputTokens: 0 },
+          time: AT,
+          providerMetadata: { provider: 'x', model: 'other' },
         },
       },
     },
@@ -598,7 +636,53 @@ describe('turn cost row', () => {
     })
   }
 
-  it('renders the turn total and its route', () => {
+  /** One settled assistant attempt on the route it was billed on. */
+  function step(turn: number, finalNode: unknown): ChatConversationViewNode {
+    return node('assistant-step', `step-${String(turn)}`, { turn, finalNode })
+  }
+
+  it('reads each attempt of the turn, with the route and the moment it settled', () => {
+    expect(attemptsOf(nodes, 1)).toEqual([
+      {
+        route: 'bai/glm-5.3-flash',
+        at: AT,
+        buckets: { uncachedInputTokens: 1_000_000, outputTokens: 1_000_000, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      },
+      {
+        route: 'x/other',
+        at: AT,
+        buckets: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000, cacheWriteTokens: 0 },
+      },
+    ])
+    expect(attemptsOf(nodes, 2)).toEqual([])
+  })
+
+  it('skips an attempt whose row carries no time or no reading to price', () => {
+    // A usage payload or a settle time is what an attempt is priced by; without
+    // one there is no charge to place, and a row of another turn is another
+    // turn's evidence entirely.
+    const incomplete = [
+      step(1, { time: AT, providerMetadata: { provider: 'a', model: 'b' } }),
+      step(1, { time: AT, usage: null, providerMetadata: { provider: 'a', model: 'b' } }),
+      step(1, { time: AT, usage: { inputTokens: 1 } }),
+      step(1, {
+        time: Number.NaN, usage: { inputTokens: 1 }, providerMetadata: { provider: 'a', model: 'b' },
+      }),
+      step(2, { time: AT, usage: { inputTokens: 1 }, providerMetadata: { provider: 'a', model: 'b' } }),
+    ]
+    expect(attemptsOf(incomplete, 1)).toEqual([])
+    // The route and the usage are what an attempt is priced by, and one row
+    // carrying both is read rather than skipped.
+    expect(attemptsOf([step(1, {
+      time: AT, usage: { inputTokens: 1 }, providerMetadata: { provider: 'a', model: 'b' },
+    })], 1)).toEqual([{
+      route: 'a/b',
+      at: AT,
+      buckets: { uncachedInputTokens: 1, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    }])
+  })
+
+  it('renders the turn total and each route it was billed on', () => {
     const stub = stubConfigForm<BillingSettings>()
     stub.publish(snapshot({
       value: {
@@ -621,8 +705,12 @@ describe('turn cost row', () => {
     const rows = dialog.querySelector('[data-billing-turn-routes]')
     expect(rows?.textContent).toContain('bai/glm-5.3-flash')
     expect(rows?.textContent).toContain('¥18.00')
-    // The dialog's footnote names the route it priced and the three figures it
-    // charged it at.
+    // The second route carries no rates here, so its share is named as unpriced
+    // instead of being folded into the total.
+    expect(rows?.textContent).toContain('x/other')
+    expect(within(dialog).getAllByText('No rates configured').length).toBeGreaterThan(0)
+    // The dialog's footnote names every route it priced, next to the share it
+    // could not price.
     expect(within(dialog).getByText(/bai\/glm-5\.3-flash: 0\.15 \/ 4\.5 \/ 13\.5/)).toBeDefined()
   })
 
@@ -715,7 +803,48 @@ describe('turn cost row', () => {
     const pill = screen.getByLabelText('Cost -')
     expect(pill.textContent).toContain('-')
     fireEvent.click(pill)
-    expect(screen.getByText('This turn ran on several routes (bai/glm-5.3-flash, x/other) and its own accounting cannot split them, so no cost is counted')).toBeDefined()
+    expect(screen.getByText('This turn ran on several routes (bai/glm-5.3-flash, x/other), and the loaded evidence cannot split them, so no cost is counted')).toBeDefined()
+  })
+
+  it('leaves the tail seat to a turn whose action row already shows the figure', () => {
+    // An interrupted turn renders the tail alone, so that seat carries the cost;
+    // every turn with a closing message renders its action row, where the row
+    // seat already states it, and one figure on screen is the point.
+    const stub = stubConfigForm<BillingSettings>()
+    stub.publish(snapshot({
+      value: { currency: 'CNY', models: { 'bai/glm-5.3-flash': FLASH_RATES }, cache: null, cacheError: null },
+    }))
+    const face = billingFace(stub)
+    const closed = [
+      node('turn-tail', 'tail-1', {
+        turn: 1,
+        time: AT,
+        closing: { finalNode: { seq: 1, messageId: 'message-1' } },
+        tokenUsage: {
+          uncachedInputTokens: 1_000_000, outputTokens: 0, totalTokens: 1_000_000,
+          cacheReadTokens: 0, cacheWriteTokens: 0,
+          routes: [{ provider: 'bai', model: 'glm-5.3-flash' }],
+        },
+      }),
+    ]
+    const shown = render(
+      <TurnCostMeterTail {...seats()}
+        turn={{ turn: 1 } as never} seq={1} openFile={() => {}}
+        useChat={chatOver(closed)}
+        {...face}
+        t={t} />,
+    )
+    expect(shown.container.innerHTML).toBe('')
+    shown.unmount()
+
+    render(
+      <TurnCostMeterTail {...seats()}
+        turn={{ turn: 1 } as never} seq={1} openFile={() => {}}
+        useChat={chatOver([tail(1, AT, [{ provider: 'bai', model: 'glm-5.3-flash' }])])}
+        {...face}
+        t={t} />,
+    )
+    expect(screen.getByText('Cost ¥4.50')).toBeDefined()
   })
 
   it('prices a turn that ran in the off-peak window and names the window it used', () => {
@@ -730,7 +859,14 @@ describe('turn cost row', () => {
       },
     }))
     const offPeakAt = Date.UTC(2024, 0, 1, 4, 0)
-    const list = [tail(1, offPeakAt, [{ provider: 'deepseek-official', model: 'deepseek-v4-flash' }])]
+    const list = [
+      tail(1, offPeakAt, [{ provider: 'deepseek-official', model: 'deepseek-v4-flash' }]),
+      step(1, {
+        usage: { inputTokens: 1_000_000, outputTokens: 0 },
+        time: offPeakAt,
+        providerMetadata: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      }),
+    ]
     render(
       <TurnCostMeter {...seats()}
         turn={{ turn: 1 } as never} seq={1} openFile={() => {}}
@@ -776,6 +912,11 @@ describe('turn cost row', () => {
           cacheReadTokens: 0, cacheWriteTokens: 0,
           routes: [{ provider: 'deepseek-official', model: 'deepseek-v4-flash' }],
         },
+      }),
+      step(1, {
+        usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 },
+        time: AT,
+        providerMetadata: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       }),
     ]
     render(
@@ -1700,6 +1841,7 @@ describe('plugin registration', () => {
       children: {
         'plugins.item': { kind: 'list', scope: 'root' },
         'conversation.composer.dock': { kind: 'list', scope: 'session' },
+        'conversation.chat.turnEndInfo': { kind: 'list', scope: 'session' },
         'conversation.chat.turnTail': { kind: 'list', scope: 'session' },
       },
     } as never, () => null)
@@ -1734,10 +1876,11 @@ describe('plugin registration', () => {
     return entry.inject()
   }
 
-  it('registers all three surfaces and fiber disposal removes them', async () => {
+  it('registers all four surfaces and fiber disposal removes them', async () => {
     const { ctx, fiber } = await mountPlugin()
     expect(ctx.slots.entries('plugins.item')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.composer.dock')).toHaveLength(1)
+    expect(ctx.slots.entries('conversation.chat.turnEndInfo')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
     // The configuration page is one of the Plugins page's official-plugin cards,
     // titled from this package's dictionary. Its id is the entry id the Host
@@ -1749,10 +1892,21 @@ describe('plugin registration', () => {
     // The composer figures state the display order that places them after the
     // shipped stats row, which is the entry stating order 0.
     expect(ctx.slots.entries('conversation.composer.dock')[0]?.options.order).toBe(1)
+    // The Turn reading states one id in both of its seats, and the seats are the
+    // action row's own end-info cluster plus the tail an interrupted turn keeps.
+    expect(ctx.slots.entries('conversation.chat.turnEndInfo')[0]?.options).toMatchObject({
+      id: 'billing',
+      order: 0,
+    })
+    expect(ctx.slots.entries('conversation.chat.turnTail')[0]?.options).toMatchObject({
+      id: 'billing',
+      order: 0,
+    })
 
     await fiber.dispose()
     expect(ctx.slots.entries('plugins.item')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.composer.dock')).toHaveLength(0)
+    expect(ctx.slots.entries('conversation.chat.turnEndInfo')).toHaveLength(0)
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
   })
 
