@@ -32,12 +32,16 @@ import dialogCss from './stat-dialog.module.css'
  * (the completed Turn's own `turn`, `seq`, and `openFile`, plus the session
  * seats), the plugin's injected face, and the pill's locale seat.
  *
+ * Both seats declare the same owner share, and this package registers one entry
+ * in each, so the type names both slots rather than the one it happens to be
+ * mounted under.
+ *
  * The owner share arrives spread onto the entry, not nested under an `owner`
  * key, so `turn` is a direct prop: it is the Turn's Location, and the number
  * this pill prices is `turn.turn`.
  */
 export type TurnCostMeterProps =
-  & PropsRuntime<'conversation.chat.turnTail'>
+  & PropsRuntime<'conversation.chat.turnEndInfo' | 'conversation.chat.turnTail'>
   & InjectFace<BillingPillsInjected>
   & PropsLocale<typeof LOCALE_NS>
 
