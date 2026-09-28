@@ -34,7 +34,12 @@
   max-width: 100%;
   padding: 1px 8px;
   border: none;
-  border-radius: 24px;
+  border-radius: 999px;
+  /* The pill is full-round, so it states its own arc back: ui-theme's
+     corner-shape.css applies a superellipse to every rounded surface, which
+     squares off capsule ends. The shipped StatsPills pill pairs the same two
+     declarations. */
+  corner-shape: round;
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   font: inherit;

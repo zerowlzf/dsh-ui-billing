@@ -40,19 +40,29 @@ describe('composer figures layout', () => {
       'font: inherit',
       'line-height: inherit',
     ]))
+    // The shipped pip carries the same two declarations, and they belong
+    // together: ui-theme's corner-shape.css applies a superellipse to every
+    // rounded surface, so a full-round pill that omits the pairing renders with
+    // squared-off ends on engines that support it. ui-theme's own stylesheet gate
+    // checks the pairing repo-wide; this pins it in the package that owns the rule.
+    expect(declarationsFrom(css, '.pill')).toEqual(expect.arrayContaining([
+      'border-radius: 999px',
+      'corner-shape: round',
+    ]))
   })
 })
 
 describe('turn pill layout', () => {
   it('wears the geometry and tier of the shipped usage and time triggers', () => {
     // The reading sits inside the action row holding the shipped Turn-usage and
-    // Turn-time triggers: the same 28px pill, 6px/8px padding, rounding, and
-    // one-pixel-under-secondary reading, so the figures read as one cluster.
+    // Turn-time triggers: the same 28px pill, 6px/8px padding, shared rounding
+    // token, and one-pixel-under-secondary reading, so the figures read as one
+    // cluster.
     const css = read('TurnCostMeter.module.css')
     expect(declarationsFrom(css, '.trigger')).toEqual(expect.arrayContaining([
       'height: calc(28px + var(--dsh-content-font-delta, 0px))',
       'padding: 6px 8px',
-      'border-radius: 28px',
+      'border-radius: var(--dsw-radius-sm)',
       'font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px)',
       'line-height: calc(24px + var(--dsh-content-font-delta, 0px))',
       'min-width: 0',
@@ -90,7 +100,7 @@ describe('billing dialog surface', () => {
     expect(declarationsFrom(css, '.panel')).toEqual(expect.arrayContaining([
       'position: fixed',
       'z-index: 1100',
-      'border-radius: 12px',
+      'border-radius: var(--dsw-radius-lg)',
       'background: var(--dsw-specific-menu)',
       'backdrop-filter: var(--dsw-menu-backdrop-filter)',
       'box-shadow: var(--dsw-elevation-prominent)',

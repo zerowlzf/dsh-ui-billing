@@ -178,6 +178,7 @@ officialRequest: null
 
 - 每轮节点数据只存在于已物化的 Chat 节点 store 里，而不在官方统计行读取的那份 legacy 兼容切片里。
 - 费用读数是同一对组件的两处注册：`conversation.chat.turnEndInfo`（ui-chat 声明的、位于已完成轮次操作行**内部**的读数 list）与 `conversation.chat.turnTail`（它声明的、位于该行**之上**的特性贡献 list）。行座位是常规的那一个；tail 座位只在轮次没有 `closing` 时渲染，也就是那种根本没有操作行的中断。两者都读 `turn-tail` 载荷（`tokenUsage`、`time`，以及 `closing` 是否存在），外加同一轮次的 `assistant-step` 行——其已结算的 `finalNode` 带有该次尝试被计费的路由（`providerMetadata`）、它的用量与结算时刻。ui-chat 的 Assistant Definition 从持久消息的 `message.source` 写入这条路由，与 Trajectory 目标为自己那些行保留的是同一对字段。
+- 四张样式表都处在 ui-theme 的样式门禁之内，这些门禁按 CSS 文本扫描每个包：圆角取自 `--dsw-radius-*` 标尺而不是字面量；**正圆半径**必须在同一条规则里配对 `corner-shape: round`，因为 `corner-shape.css` 会给所有圆角表面套上超级椭圆；高度、焦点环、滚动条与菜单规则同样按文本检查。数字自身的几何仍由 `tests/figures-layout-styles.client.spec.ts` 读同一份 CSS 文本钉住。
 - 价格表夹具就是线上文档页实际提供的那张表格，逐字录下，因此 `parsePricePage` 是针对它真正会遇到的行合并、脚注标记与单位后缀来规定的。默认用中文版，因为它陈述的币种就是本包默认币种；英文版在样张里充当「币种不符被拒」的用例。
 - `BillingTranslate` 保持本地声明，而 props 从 `PropsLocale` 派生：框架在合并后的 `LocaleNamespaceMap` 上给出的座位同时接受本字典的键与共享的通用键，它可以赋给更窄的本地别名，反向则不行。一包两 face 的布局让 `src/settings.ts` 在两个 leaf 中都参与编译——Client leaf 把它列进 `include`——因为 Client 配置不允许进入 split 项目的 Host leaf。
 - 配置条目（`ui-billing`）与文案字典（`billing`）分开命名：两者共用一个标识符会把 scope 绑到字典上，于是 Host 明明在提供正确取值，而每个界面都渲染自己的「不可用」状态。
