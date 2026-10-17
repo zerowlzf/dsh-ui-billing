@@ -12,7 +12,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
-在 Web Chat 界面已存在的前提下挂载本插件；一旦知道某个单价或余额，胶囊就会出现，配置页出现在「插件」页上本包自己那一行。所有界面读取同一个配置值，因此没有提供配置条目的部署只是什么都不渲染。
+挂载方式与各界面显示什么见 [包 README](../README.zh.md#use-this-package)；以下各节说明单价模型、编辑规则与费用折叠。
 
 ### 单价
 
@@ -121,10 +121,8 @@ officialRequest: null
 - [ui-primitives](../../ui-primitives/README.zh.md) — 页面用于承载自绘控件的共享设置表单外框。
 - [ui-chat](../../ui-chat/README.zh.md) — 本包所扩展的胶囊、对话框与已完成轮次操作行链条。
 
-## 已知限制与后续工作
-
 <a id="known-limitations-and-deferred-work"></a>
-
+## 已知限制与后续工作
 
 这些限制界定了当前这份费用显示。它们是本包当前的约束，而不是一份通用计费比较，也不是任务清单。
 

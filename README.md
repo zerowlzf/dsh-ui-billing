@@ -9,11 +9,13 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package prices a Web session from rates the user owns. Its Host half declares the `ui-billing` fields live and caches two provider reads in them: the DeepSeek account balance and the published price table. Its browser half renders two cost figures in the composer's dock, a cost reading in every completed Turn's action row, and the Billing page on the Plugins page. A route is a `provider/model` pair priced per million tokens in up to two daily windows — cached, uncached, and output — at the peak rate or the published off-peak one. The balance is the DeepSeek account's.
+This package prices a Web session from rates the user owns. Its Host half declares the `ui-billing` fields live and caches two provider reads there: the DeepSeek account balance and the published price table. Its browser half renders two cost figures in the composer's dock, a cost reading in every completed Turn's action row, and the Billing page on the Plugins page. A route is a `provider/model` pair priced per million tokens in up to two daily windows — cached, uncached, and output — at the peak or published off-peak rate. The balance is the DeepSeek account's.
 
 ## Table of Contents
 
 - [Use this package](#use-this-package)
+- [Understand the implementation](docs/README.md#understand-the-implementation)
+- [Further Exploration](docs/README.md#further-exploration)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)

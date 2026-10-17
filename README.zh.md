@@ -14,6 +14,8 @@ kind: "package-reference"
 ## 目录
 
 - [Use this package](#use-this-package)
+- [Understand the implementation](docs/README.zh.md#understand-the-implementation)
+- [Further Exploration](docs/README.zh.md#further-exploration)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)

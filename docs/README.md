@@ -12,7 +12,7 @@ This file carries the long-form detail behind the package's concise [README](../
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin with the Web Chat surfaces present; the pills appear once a rate or a balance is known, and the configuration page appears on this package's own row of the Plugins page. Every surface reads the same configuration value, so a deployment that serves no configuration entry simply renders nothing.
+The [package README](../README.md#use-this-package) states how to mount the plugin and what each surface shows; the sections below state the rate model, its editing rules, and the cost folds.
 
 ### Rates
 
@@ -121,10 +121,8 @@ Read these pages when the displays are not enough. They move from the browser su
 - [ui-primitives](../../ui-primitives/README.md) — the shared settings-form frame the page renders its own controls inside.
 - [ui-chat](../../ui-chat/README.md) — the pills, dialogs, and completed-turn action-row chain this package extends.
 
-## Known Limitations and Deferred Work
-
 <a id="known-limitations-and-deferred-work"></a>
-
+## Known Limitations and Deferred Work
 
 These limits define the current cost display. They are current package constraints, not a general billing comparison or a task backlog.
 
