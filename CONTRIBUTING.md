@@ -1,6 +1,6 @@
 # Contributing / maintaining this repository
 
-This repository is the **release snapshot** of one DSH Web plugin: `@deepseek-ai/dsh-client-ui-billing`. Its files are a byte-for-byte copy of the package directory `packages/client/ui-billing` in [zerowlzf/deepseek-harness](https://github.com/zerowlzf/deepseek-harness) on the `master` branch, which is a fork of the DeepSeek Harness carrying this plugin alongside the harness it extends. That branch is the one whose baseline this snapshot names: the plugin is built against DSH `0.2.1-rc.1`.
+This repository is the **release snapshot** of one DSH Web plugin: `@deepseek-ai/dsh-client-ui-billing`. Its files are a byte-for-byte copy of the package directory `packages/client/ui-billing` in [zerowlzf/deepseek-harness](https://github.com/zerowlzf/deepseek-harness) on the `master` branch, which is a fork of the DeepSeek Harness carrying this plugin alongside the harness it extends. That branch is the one whose baseline this snapshot names: the plugin is built against DSH `0.2.1-rc.2`.
 
 ## Why the code is developed in the fork
 

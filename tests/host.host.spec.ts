@@ -163,9 +163,17 @@ function stubReads(answers: Answers = {}) {
   return { fetchImpl, page }
 }
 
-/** Mount the web capability with one provider standing in for the deployment's retrieval backend. */
+/**
+ * Mount the web capability with one provider standing in for the deployment's
+ * retrieval backend. Both provider selections are required live references as
+ * of upstream 0.2.1-rc.2; `undefined` keeps the auto-selection this single
+ * stub has always relied on.
+ */
 function mountWeb(ctx: Context, fetchPage: WebFetchProvider['fetch']): void {
-  new WebRuntime(ctx).registerFetchProvider({ id: 'stub-fetch', available: () => true, fetch: fetchPage })
+  new WebRuntime(ctx, {
+    searchProvider: live<string | undefined>(undefined),
+    fetchProvider: live<string | undefined>(undefined),
+  }).registerFetchProvider({ id: 'stub-fetch', available: () => true, fetch: fetchPage })
 }
 
 /**
