@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/client/ui-billing/docs/README.md
+/:
+  en: ede5c3140b21d38d
+  zh: c39275c1317f2078
+/deepseek-ai-dsh-client-ui-billing-details:
+  en: f4da300c0267985d
+  zh: f71438931cbdb2cc
+/deepseek-ai-dsh-client-ui-billing-details/use-this-package:
+  en: 5a537d4fe7eb7567
+  zh: 205e415b372ef23b
+/deepseek-ai-dsh-client-ui-billing-details/use-this-package/rates:
+  en: 77a55ebd3e6c3e8f
+  zh: b7c3a494473e3483
+/deepseek-ai-dsh-client-ui-billing-details/use-this-package/rate-editing:
+  en: 305bf473bef416e6
+  zh: e69927c3722e8fab
+/deepseek-ai-dsh-client-ui-billing-details/use-this-package/cost-display:
+  en: 927a2530c35103b0
+  zh: 202add6d280d49c5
+/deepseek-ai-dsh-client-ui-billing-details/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 42b15ac6321706aa
+/deepseek-ai-dsh-client-ui-billing-details/understand-the-implementation/the-live-configuration-fields:
+  en: b2d89b4d05014df0
+  zh: 9f50083bf55f9ce3
+/deepseek-ai-dsh-client-ui-billing-details/understand-the-implementation/cost-folds:
+  en: f40430447840009f
+  zh: 8946e049e4db939d
+/deepseek-ai-dsh-client-ui-billing-details/understand-the-implementation/registration:
+  en: 7556b28037d84651
+  zh: 825f8bbbe253cd7c
+/deepseek-ai-dsh-client-ui-billing-details/further-exploration:
+  en: 95013b0c0b4a2479
+  zh: 4cb8132b349a2615
+/deepseek-ai-dsh-client-ui-billing-details/known-limitations-and-deferred-work:
+  en: 82d82fe8c19bb1f6
+  zh: 7e241d62df710305
+/deepseek-ai-dsh-client-ui-billing-details/known-limitations-and-deferred-work/dev-note:
+  en: 1166dbe513bdc391
+  zh: c575f8328d303eb1

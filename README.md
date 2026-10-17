@@ -14,131 +14,16 @@ This package prices a Web session from rates the user owns. Its Host half declar
 ## Table of Contents
 
 - [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Further Exploration](#further-exploration)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
 - [Dev Note](#dev-note)
 
------
-
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin with the Web Chat surfaces present; the pills appear once a rate or a balance is known, and the configuration page appears on this package's own row of the Plugins page. Every surface reads the same configuration value, so a deployment that serves no configuration entry simply renders nothing.
+Mount this plugin with the Web Chat surfaces present; the pills appear once a rate or a balance is known, and the configuration page appears on this package's own row of the Plugins page. Every surface reads the same configuration value, so a deployment that serves no configuration entry simply renders nothing, and the official DeepSeek routes carry published defaults, so an official session reads a cost out of the box.
 
-### Rates
-
-The Billing page lists every provider the deployment can configure, with one row per model that provider's own settings profile declares. Each row carries the three rates for that `provider/model` route, once per price window:
-
-| Rate | Charges |
-|---|---|
-| Cache hit | Prompt tokens served from the provider's cache. |
-| Cache miss | Uncached prompt tokens, including cache writes. |
-| Output | Generated tokens, reasoning tokens included. |
-
-Rates are in the configured currency (`currency`), per million tokens. Only the official DeepSeek provider bills by time of day, and only its cards offer a second band of fields: the peak row is the route's own price, and the off-peak row is what that route charges outside its peak window. Every other provider's card carries the three fields once, because a provider that publishes one price charges it at every hour, and any such route can be given a second band on request (`Add off-peak rate`): the schema, the folds, and the configuration entry carry one for every route, and a route that already holds one shows both. DeepSeek states its window as Beijing time Monday–Friday 09:00–12:00 and 14:00–18:00 at half price outside it, so the official card names the window in force above its rows.
-
-The official DeepSeek provider's routes carry published defaults, so an official session reads a cost out of the box: a stored row for that route overrides everything published, an eligible row shows the published figure as its field placeholder and a `default rate` badge, and clearing the row returns the route to it. Every other route with no stored rates contributes to no total: the pills show a dash and the dialog names the route, rather than showing a number the configuration cannot support. Rates are stored in the plugin configuration's `models` record under the key `provider/model`, so a hand edit of the profile patch and the page are the same storage.
-
-The Host refreshes the published figures from the provider's price page (`pricingUrl`, the Chinese documentation page by default), retrieving it through the deployment's own web capability (`ctx.web`) rather than a request of this package's own; a deployment that mounts no such capability records that it had no page to read. A published price list moves rarely, so the automatic read is long-spaced — fifteen days by default (`pricingRefreshIntervalMs`; `0` reads once at startup and schedules nothing) — and a start whose stored table is still inside that interval waits instead of reading again, which is what makes a restart cost no request. The page's own `Read now` control asks for one at any time, and it is the configuration entry that carries the request: the browser writes `officialRequest`, the Host reads the page and clears the field when that read settles, and the card shows it in flight until then. DeepSeek serves no price endpoint — its API answers completions, files, a model list of ids, and the balance — so the page's table is the only machine-readable statement of the prices. A read whose table cannot be recognized, or that states its figures in another currency than `currency`, is recorded as a structured failure: the shipped snapshot keeps pricing the official routes, and the Billing page says what happened.
-
-### Rate editing
-
-Saving a row writes the fields that hold a figure and leaves the rest of the document alone: an empty field is not a way to store a zero, and text that does not parse writes nothing at all rather than changing a row the user mistyped. Emptying every field of a row removes it, which is also what the row's own Clear control does. Emptying only the off-peak fields removes that band, so a route with one price stays a route with one price.
-
-### Cost display
-
-The composer's ambient dock carries a session-cost figure and a balance figure: `conversation.composer.dock` is the list ui-conversation declares for ambient entries under the composer card, and the shipped stats row is seated there as one entry, so these figures join it as another rather than reaching inside it. They stand after that row — the list's own display order, not the order the plugins happened to assemble in — and read at the row's tier, the one-pixel-under-secondary size its pills wear, because the dock states no type tier of its own. Both are bare amounts (`¥16.82` and `¥15.96`, distinguished by the coin and wallet glyphs, and a bare `-` while one is unknown); each one states what it is through its accessible name and hover title rather than through visible words. The session total accumulates the `tokenUsage` projection — the whole durable log, not the loaded window — by pricing each growth of the running total at the route active when it grew, which is what keeps a mid-session model switch correctly split.
-
-Each completed Turn carries its own cost reading in its action row, through `conversation.chat.turnEndInfo` — the list ui-chat declares for readings inside that row's end-info cluster, seated after the shipped 用量 trigger and before its clock, with the Turn, its closing sequence, and the file opener as owner share. It shows `费用 ¥0.42` beside those figures and opens that Turn's breakdown: one row per charge, priced at the window each attempt settled in. A Turn that also produced files shows both its tail entry — the shipped files row — and this figure, because the two seats are different lists, so neither displaces the other. Three cases carry no figure, and the dialog says which one applies:
-
-- the Turn's own accounting is absent (its events paged out, an attempt that never settled), exactly as its own 用量 pill shows nothing then — the session total is a session-wide number and never stands in for one Turn;
-- its accounting names several routes and no loaded attempt places them — a Turn whose assistant rows aged out of the loaded window, or one the log recorded only as a total; the dialog names the routes it could not attribute rather than charging the whole aggregate once per route;
-- a route it ran on has no configured rates, which the dialog names as unpriced.
-
-A Turn interrupted before any finalized text renders no action row at all, so the reading keeps its tail seat through `conversation.chat.turnTail`, whose owner share is the same three members. Every Turn an action row already shows leaves that seat empty, which keeps one figure on screen. The reading brings no reveal rule of its own: inside the row the whole cluster follows that row's reveal, and the tail seat exists only where there is no row to follow. A Turn that has not ended yet has no tail — the shipped tail node appears when the Turn closes — so the newest answer carries its cost only once that Turn settles.
-
-Nothing here issues a model request or writes a session event: the pills are a read-only projection of usage the providers already reported.
-
------
-
-<a id="understand-the-implementation"></a>
-## Understand the implementation
-
-<details>
-<summary>Implementation internals — click to expand</summary>
-
-### The live configuration fields
-
-The values are this plugin's own configuration, declared live in its `Config` schema and held in the Profile's plugin configuration under the entry id `ui-billing` — the row id the web composition declares. That is also why a document written before the move to Profile configuration migrates into them instead of being lost: the legacy `settings.yaml` section carries the same name.
-
-`ui-billing` holds one value:
-
-```yaml
-models:
-  bai/glm-5.3-flash:
-    cacheHit: 0.15
-    cacheMiss: 4.5
-    output: 13.5
-  deepseek-official/deepseek-flash:
-    cacheHit: 0.04
-    cacheMiss: 2
-    output: 8
-    offPeak:
-      cacheHit: 0.02
-      cacheMiss: 1
-      output: 4
-cache:
-  total: 12.75
-  currency: CNY
-  available: true
-  at: 1787667264186
-cacheError: null
-official:
-  models:
-    deepseek-flash: { cacheHit: 0.04, cacheMiss: 2, output: 8, offPeak: { cacheHit: 0.02, cacheMiss: 1, output: 4 } }
-  currency: CNY
-  at: 1787667264186
-  source: https://api-docs.deepseek.com/zh-cn/quick_start/pricing/
-officialError: null
-officialRequest: null
-```
-
-`models` is user configuration and the Host only reads it. `cache`, `official`, their two error fields, and `officialRequest` are Host-owned, and each is written by its own refresh chain or by the page that asks for a read. For the balance the Host resolves the API key per read (the `credentials` seam first, then the process environment), calls `GET /user/balance` on the configured base URL, and writes the answer back. The `credentials` service is a required injection, so the first read waits for the credential document instead of reporting a key the operator did store as missing. The balance read takes a key resolver rather than the context, so the plugin body owns the credential seam and the read stays one call that reaches no service; the price read takes the page fetcher the same way, resolved from the optional `web` service, so the parser is a pure function over markup. A failed read of either kind keeps the previous value and records a structured reason — no key, an HTTP status, a transport failure, an unreadable payload, a body the retrieval path capped, no mounted web capability, and for prices a currency the document does not price in — which the browser states in its own language, with the untranslatable detail appended as a second clause. Each chain re-arms itself after its own settlement, on its own configured interval, and stops with the plugin fiber; the price chain is armed from the stored table's own age, and a read the page asked for replaces that timer rather than adding a second one.
-
-### Cost folds
-
-`tokenUsage` is a running total whose growth between two reads is exactly what one route was billed, so the session fold records one stretch per observed growth and prices each under its own route. Editing a rate reprices every stretch, and switching models starts a new stretch; neither loses history. The turn fold starts from the durable turn-tail accounting — the same evidence the shipped Turn-usage dialog shows — and splits it across the charges the Turn's loaded assistant rows prove: each row carries its own route, its usage, and the instant it settled, which is what places it in a price window. Attempts on one route in one window are summed into one row, and the difference between the Turn's aggregate and the surviving samples — a retried attempt whose row paged out — stays charged at the last row's rate, so the priced total equals the tokens the provider reported. With no loaded attempt the aggregate is priced only when the Turn's accounting names one route; several routes and nothing to place them returns no row, and the dialog names them. The session projection is never substituted for it, because a session-wide total read as one turn's cost is simply wrong.
-
-Both folds also charge each charge in the price window it happened in. The session fold stamps every observed growth with the clock at the moment it was observed, which is the window the provider was pricing while those tokens were produced; the turn fold reads each attempt's own settle time, and falls back to the moment the Turn closed only when no attempt survived. A route that publishes a single price is not split by window, because both bands hold the same figures.
-
-### Registration
-
-Four surfaces, each restored on unload: `plugins.item` (the Billing configuration page, registered under the entry id `ui-billing` and listed as one of the Plugins page's plugin cards), `conversation.composer.dock` (the session-cost and balance figures in the composer's ambient dock, after the shipped stats row), `conversation.chat.turnEndInfo` (the per-Turn cost reading inside a completed Turn's action row, between the shipped usage trigger and the clock), and `conversation.chat.turnTail` (the same reading for a Turn that has no action row). The page is the custom-page case the configuration contract documents: the Plugins page owns the entry's form and hands it over, so the page stages an edit and one save writes every staged write through `form.mutate`, while the rates' rows — one field per route and price window over a map — stay this package's own controls, which the shared scalar field kit cannot express. A plugin card is the seat this page can be reached from: a row's own page needs the bundle row that declares it, and this plugin's row belongs to the shipped web bundle, which the page leaves out of its list as a built-in profile bundle. The card appears while the Host serves the entry, exactly as the settings pages the shipping plugins carry do. The figure seats are list slots their owning packages declare, and an owner share reaches an entry spread flat onto its props, so the Turn reading reads `turn` directly, the way the shipped produced-files entry does; the row seat and the tail seat state one id and share one component pair, so a Turn is priced once wherever it lands. Components type their props as the slot's shares — `PropsRuntime` (owner share and session seats), `InjectFace` over this plugin's face, and `PropsLocale` — never as a hand-written list of members.
-
-The settings page lists one card per provider whose profile the user layer configures, whose adapter is currently registered, or whose deployment-level profile carries models (the shipped official provider is one); a catalogue entry with none of those carries nothing to price and is left out. Each card's models come from that profile, and any route a stored rate row or a typed input names keeps its card, so a route whose provider disappeared stays editable and clearable.
-
-The apply closure owns every ctx read, and each surface's face carries only what that surface binds: the two pills take a `useBilling` selector hook over the entry's form snapshot, and the configuration page takes a `useBillingGroups` hook over the loaded provider groups plus the plain `routeGroups` loader. The page writes nothing through this face — its rates travel through the form the Plugins page hands it. The directory's own invalidations (`llm/adapters-updated`, `connection/reset`) are subscribed in the plugin, and the group list is one observable store, so a component holds no subscription machinery and never reaches for the context.
-
-</details>
-
------
-
-<a id="further-exploration"></a>
-## Further Exploration
-
-Read these pages when the displays are not enough. They move from the browser surfaces to the measurement and the settings transport they read.
-
-- [dsh-token-meter](../../llm/token-meter/README.md) — the `tokenUsage` projection this package accumulates.
-- [dsh-settings](../../settings/settings/README.md) — the configuration service whose form the Host half writes through and the page owner hands to the page.
-- [dsh-web](../../web/web/README.md) — the web capability the Host reads the published price page through.
-- [ui-settings](../ui-settings/README.md) — the shared configuration form the page owner reads an entry through.
-- [ui-plugin-manager](../ui-plugin-manager/README.md) — the Plugins page whose `plugins.item` slot this package's page registers into, and whose `SettingsForm`-less custom-page contract it follows.
-- [ui-primitives](../ui-primitives/README.md) — the shared settings-form frame the page renders its own controls inside.
-- [ui-chat](../ui-chat/README.md) — the pills, dialogs, and completed-turn action-row chain this package extends.
-
------
+The composer dock shows the session total and the balance, and every completed Turn carries its own reading that opens a per-charge breakdown. [the details document](docs/README.md) states the rate model, the editing rules, the two cost folds, and what the package registers.
 
 <a id="model-experience"></a>
 ## Model Experience
@@ -153,22 +38,13 @@ None; the package never assembles or sends a provider request.
 
 <a id="known-limitations-and-deferred-work"></a>
 
+These limits define the current cost display. They are current package constraints, not a general billing comparison or a task backlog; [the details document](docs/README.md) states each one in full.
 
-These limits define the current cost display. They are current package constraints, not a general billing comparison or a task backlog.
-
-- **A Turn with incomplete accounting shows no cost** — the durable per-Turn accounting is all-or-nothing, so a Turn whose evidence is incomplete (its events paged out, an attempt that never settled) renders no figure rather than a wider session number. An old Turn can therefore read as costless while its answer is still on screen, which is the same abstention the shipped Turn-usage pill makes beside it.
-- **A Turn whose attempts all aged out of the loaded window shows no cost** — the split needs the assistant rows of that Turn, and the loaded window is bounded; when the Turn's accounting names several routes and no row places them, the reading withholds the figure and the dialog names the routes instead of charging the aggregate once per route. A Turn whose accounting names one route is still priced exactly without them.
-- **The split follows the last row's rate for unaccounted tokens** — a retried attempt whose row paged out leaves the Turn's aggregate larger than its surviving samples; that difference is charged at the rate of the row that billed last, which keeps the total equal to the reported tokens but can place those tokens in the wrong price window or route.
-- **A price boundary inside one Turn is charged per attempt** — each attempt is placed by its own settle time, so a Turn running across 12:00 or 18:00 Beijing time is split between bands; a single long request is still charged at the band in force when it settled, and a Turn priced without attempts falls back to its close time.
-- **The session total is attributed from the browser's first sight** — the running total a page first observes is priced under the route active then, because the routes of everything before it are not in the evidence a browser can read; only later growth is split per route. A reload mid-session therefore re-reads the whole total under the route in use at that moment.
-- **No figures appear before the shipped row does** — both composer figures ride ui-chat's stats row, which renders once the session has a step or billed tokens, so a brand-new session shows no balance until its first Turn. The per-Turn reading appears when that Turn closes, since the row it sits in belongs to the shipped tail node.
-- **An interrupted Turn shows its cost in the tail, not in a row** — a Turn interrupted before any finalized text has no action row to sit in, so the reading keeps the tail seat there; that is the only case that seat renders in.
-- **Cache writes are charged as uncached input** — the three configured rates match how the DeepSeek adapters report usage, where a cache write arrives as prompt input. A provider that reports writes in their own bucket is charged that bucket's tokens at its cache-miss rate.
-- **A stretch that crosses a price boundary is charged at one band** — the evidence is a stretch's own moment, not a per-token timestamp: the session fold takes the moment it observed the growth, and the turn fold each attempt's settle time. A long single request is therefore charged at the band in force when it ended.
-- **The published figures come from a documentation page** — DeepSeek serves no price endpoint, so the Host parses the table on `pricingUrl`, and the shipped snapshot is what prices the official routes whenever that read fails or the page is redesigned. Prices the provider changed since the last successful read reach a session at the next automatic read, which is up to `pricingRefreshIntervalMs` away, or immediately through the page's own `Read now` control.
-- **A price page in another currency is refused** — the table states its figures in one currency, and the read is dropped with a named reason when it is not the one this document prices in, because mixing them would misprice every official route by the exchange rate. Point `pricingUrl` at the matching edition when changing `currency`.
-- **A field with no fallback to display is billed zero** — an untouched peak field is never written, so a hand-typed route that displays no published price carries the schema's zeros for the fields it leaves empty. A route that does display one stores those figures along with the band the user typed, so what the row showed is what it holds. Enter the figures a route actually bills, or clear the row to fall back on the published price.
-- **The balance is always the DeepSeek account's** — by design: the page compares spend against the one account the API can report. A deployment whose sessions never use the official provider still shows this balance, and the two Host reads are the only requests this package makes.
+- **A Turn with incomplete accounting shows no cost** — the durable per-Turn accounting is all-or-nothing, so a Turn whose evidence is incomplete renders no figure rather than a wider session number.
+- **A Turn whose attempts all aged out of the loaded window shows no cost** — the split needs that Turn's assistant rows, and the dialog names the routes it could not attribute rather than charging the aggregate once per route.
+- **The session total is attributed from the browser's first sight** — everything before it is priced under the route active then, so a reload mid-session re-reads the whole total under the route in use at that moment.
+- **No figures appear before the shipped stats row does** — a brand-new session shows no balance until its first Turn, and the per-Turn reading appears when that Turn closes.
+- **The balance is always the DeepSeek account's** — by design; the two Host reads are the only requests this package makes.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -176,14 +52,7 @@ These limits define the current cost display. They are current package constrain
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-- The per-turn node data lives only in the materialized Chat node store, not in the legacy compatibility slice the shipped stats row reads.
-- The cost reading is two registrations of one component pair: `conversation.chat.turnEndInfo`, the list ui-chat declares for readings inside a completed Turn's action row, and `conversation.chat.turnTail`, the list it declares for feature contributions above that row. The row seat is the normal one; the tail seat renders only for a Turn with no `closing`, which is the interruption that has no row at all. Both read the `turn-tail` payload (`tokenUsage`, `time`, and whether `closing` exists) plus the `assistant-step` rows of the same Turn, whose settled `finalNode` carries the route the attempt was billed on (`providerMetadata`), its usage, and its settle time. ui-chat's Assistant Definition writes that route from the durable `message.source`, the same pair the Trajectory target keeps for its own rows.
-- The four stylesheets are inside ui-theme's stylesheet gates, which read CSS text across every package: radii come from the `--dsw-radius-*` scale rather than literals, a full-round radius pairs `corner-shape: round` in the same rule because `corner-shape.css` applies a superellipse to every rounded surface, and elevation, focus-ring, scrollbar, and menu rules are checked the same way. The figures' own geometry stays pinned by `tests/figures-layout-styles.client.spec.ts`, which reads the same CSS text.
-- The price-table fixture is the table the live documentation pages served, recorded verbatim, so `parsePricePage` is specified against the row spans, footnote markers, and unit suffixes it will actually meet. The Chinese edition is the default because it states its figures in the package's default currency; the English one is in the spec as the refused-currency case.
-- `BillingTranslate` stays declared locally while the props derive from `PropsLocale`: the framework's seat over a merged `LocaleNamespaceMap` accepts this dictionary's keys plus the shared common ones, which is assignable to the narrower local alias but not the reverse. The two-faces-in-one-package layout compiles `src/settings.ts` in both leaves — the Client leaf lists it in `include` — because a Client config may not enter a split project's Host leaf.
-- The configuration entry (`ui-billing`) and the copy dictionary (`billing`) stay separately named: one identifier for both binds the scope to the dictionary, so every surface renders its unavailable state while the Host serves correct values.
-- The package is inside the per-file 100% coverage gate, and four arms carry a `/* v8 ignore */`: the page's save and read handlers guard against a form the shell never hands them, its staged-route fold reads a route out of a key this package composes itself, and the save guard for an operation list the shell's own dirty flag already excludes. A release tag waits for that gate beside `pnpm run doc-sync`; between releases a change is held to the package suite, both TypeScript faces, and the linter, because review attention buys more there than the last few percent.
-- A read the page asks for travels as a write to the live fields rather than a call into the Host: the browser cannot read the documentation page itself (its origin sends no grant for one) and this package owns no Remote namespace to call, so `officialRequest` is the channel both halves share. The client writes the moment it asked; the Host reads the page and clears the field with that read's own settlement. A volatile-only change commits into the running instance without a remount, so the Host learns of the request through `loader/volatile-update` rather than by being restarted. The field being absent and being null are the same thing to every reader, because a union in the schema resolves neither into the stored document.
+Two registration facts worth keeping in view: the per-Turn reading is one component pair registered on two ui-chat lists — `conversation.chat.turnEndInfo` for the completed Turn's action row, and `conversation.chat.turnTail` for the interrupted Turn that has no row — and a read the Billing page asks for travels as a write to the live fields rather than a call into the Host. [docs/README.md](docs/README.md#dev-note) carries the full working context: node-data placement, the stylesheet gates, the price-table fixture, the translation typing, and the coverage-gate note.
 
 </details>
 

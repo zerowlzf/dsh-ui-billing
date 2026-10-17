@@ -16,7 +16,7 @@ node sync.mjs --from-dsh ~/deepseek-harness   # checkout -> this repository
 node sync.mjs --check    ~/deepseek-harness   # report drift, write nothing
 ```
 
-Only the package's own paths travel (`src/`, `tests/`, the manifests, the READMEs, `tsdown.config.ts`); `lib/` and `node_modules/` are ignored on both sides and nothing outside `packages/client/ui-billing` is touched. `--check` is what a release is verified with: an empty diff means the tag matches the checkout it came from.
+Only the package's own paths travel (`src/`, `tests/`, the manifests, the README pair with its `docs/README` companion, `tsdown.config.ts`); `lib/` and `node_modules/` are ignored on both sides and nothing outside `packages/client/ui-billing` is touched. `--check` is what a release is verified with: an empty diff means the tag matches the checkout it came from.
 
 ## Gate policy
 

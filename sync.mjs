@@ -26,6 +26,7 @@ const PACKAGE_PATHS = [
   'README.md',
   'README.zh.md',
   'README.i18n.yaml',
+  'docs',
 ]
 
 /** Directory names that are never part of the source of record. */
