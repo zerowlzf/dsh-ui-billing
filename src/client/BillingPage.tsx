@@ -25,7 +25,6 @@ import {
 import { OFFICIAL_PROVIDER, type ProviderRouteGroup } from './routes.ts'
 import type { BillingPageInjected } from './face.ts'
 import { ageOf, balanceFailureText, formatBalance, priceFailureText, windowKey } from './format.ts'
-import { currencyOf } from './CostMeter.tsx'
 import { rateOps } from './rate-ops.ts'
 import { IconCoinOutline16, IconWalletOutline16 } from './icons.tsx'
 import { LOCALE_NS, type BillingKey } from './locales.ts'
@@ -95,7 +94,7 @@ function defaultText(route: string, band: PriceWindow, field: Field, published: 
  * callbacks only, and the rates it edits travel back through `form.mutate`.
  */
 export type BillingPageProps =
-  & PropsRuntime<'plugins.row.config'>
+  & PropsRuntime<'plugins.item'>
   & InjectFace<BillingPageInjected>
   & PropsLocale<typeof LOCALE_NS>
 
@@ -236,14 +235,19 @@ export function BillingPage({
     const ops: SettingsPathOpView[] = []
     for (const route of removed) ops.push({ op: 'unset', path: ['models', route] })
     for (const route of stagedRoutes()) {
-      ops.push(...rateOps(route, typedBand(route, 'peak'), typedBand(route, 'offPeak'), rates[route]))
+      ops.push(...rateOps(
+        route, typedBand(route, 'peak'), typedBand(route, 'offPeak'), rates[route], defaultRateOf(route, published),
+      ))
     }
     /* v8 ignore next -- the shell saves only a staged, valid edit, and both staged shapes produce an operation. */
     if (ops.length === 0) return
     setSaving(true)
     setFailed(false)
     try {
-      const accepted = await form.mutate([...ops], form.state.revision)
+      // No fence on this write: the Host commits these same settings on its own
+      // schedule, so a revision read while rendering would refuse a save made
+      // after any of those writes. The form resolves the revision to fence at.
+      const accepted = await form.mutate([...ops])
       if (accepted) discard()
       else setFailed(true)
     } catch {
@@ -313,7 +317,7 @@ export function BillingPage({
     setFailed(false)
     try {
       const accepted = await form.mutate(
-        [{ op: 'set', path: ['officialRequest'], value: Date.now() }], form.state.revision,
+        [{ op: 'set', path: ['officialRequest'], value: Date.now() }],
       )
       // A refused write answers rather than rejecting, and it says so here: a
       // request that never reached the Host would otherwise look asked-for.
@@ -419,7 +423,7 @@ export function BillingPage({
             {balance !== null && !balance.available && (
               <span className={css.warn}>{t('pill.dialog.availableNo')}</span>
             )}
-            <span>{currencyOf(balance, settings?.currency ?? DEFAULT_CURRENCY)}</span>
+            <span>{settings?.currency ?? DEFAULT_CURRENCY}</span>
           </div>
           {settings?.cacheError != null && (
             <div className={css.warn}>{balanceFailureText(settings.cacheError, t)}</div>

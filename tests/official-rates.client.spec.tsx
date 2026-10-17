@@ -60,7 +60,6 @@ function snapshot(partial: Partial<ConfigFormSnapshot<BillingSettings>> = {}): C
     user: undefined,
     revision: 1,
     writable: true,
-    mode: 'host',
     ...partial,
   }
 }
@@ -83,6 +82,10 @@ function seats() {
     close: (() => {}) as never,
     useSessionStatus: (() => undefined) as never,
     useSessionRetainInfo: (() => undefined) as never,
+    useAccess: (() => undefined) as never,
+    useRemoteAccess: (() => undefined) as never,
+    useSessionAccess: (() => undefined) as never,
+    useWorkspaceAccess: (() => undefined) as never,
   }
 }
 

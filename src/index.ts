@@ -198,19 +198,24 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   const refreshBalance = async (): Promise<void> => {
-    const result = await readBalance({
-      baseURL: config.baseURL,
-      apiKeyEnv: config.apiKeyEnv,
-      currency: config.currency.get(),
-      timeoutMs: config.requestTimeoutMs,
-    }, resolveKey)
-    if (stopped) return
-    // A failed refresh keeps the previous snapshot: a stale amount with its
-    // timestamp is more useful than an empty field, and the reason says why.
-    await commit(result.ok
-      ? { cache: result.balance, cacheError: null }
-      : { cacheError: result.failure })
-    schedule(config.refreshIntervalMs, refreshBalance)
+    try {
+      const result = await readBalance({
+        baseURL: config.baseURL,
+        apiKeyEnv: config.apiKeyEnv,
+        currency: config.currency.get(),
+        timeoutMs: config.requestTimeoutMs,
+      }, resolveKey)
+      if (stopped) return
+      // A failed refresh keeps the previous snapshot: a stale amount with its
+      // timestamp is more useful than an empty field, and the reason says why.
+      await commit(result.ok
+        ? { cache: result.balance, cacheError: null }
+        : { cacheError: result.failure })
+    } finally {
+      // This timer is the only path that reads a balance again, so the chain
+      // re-arms whatever the read did rather than only when it succeeded.
+      if (!stopped) schedule(config.refreshIntervalMs, refreshBalance)
+    }
   }
 
   /**

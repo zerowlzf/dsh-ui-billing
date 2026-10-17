@@ -42,6 +42,7 @@ function text(fields: TypedBand, field: string): string {
  * @param peak - typed peak-window fields.
  * @param offPeak - typed off-peak-window fields.
  * @param stored - the row the document currently holds for this route, if any.
+ * @param fallback - the row the fields display as placeholders, if any.
  * @returns the ordered operations to apply; empty when the save changes nothing.
  */
 export function rateOps(
@@ -49,6 +50,7 @@ export function rateOps(
   peak: TypedBand,
   offPeak: TypedBand,
   stored: ModelRate | undefined,
+  fallback: ModelRate | undefined,
 ): SettingsPathOpView[] {
   const emptied = RATE_FIELDS.every(field => text(peak, field) === '' && text(offPeak, field) === '')
   if (emptied) return [{ op: 'unset', path: ['models', route] }]
@@ -62,8 +64,19 @@ export function rateOps(
     }
   }
 
-  writeBand(peak, ['models', route])
   const typedOffPeak = RATE_FIELDS.some(field => text(offPeak, field) !== '')
+  writeBand(peak, ['models', route])
+  // A new row is completed from the figures it displayed: an absent peak field
+  // resolves into the schema's zero, which would replace the published price the
+  // field still shows as a placeholder and bill that hour at nothing. A stored
+  // row keeps the figures the document already holds, and a typed zero is still
+  // a figure the user entered.
+  if (stored === undefined && fallback !== undefined) {
+    for (const field of RATE_FIELDS) {
+      if (text(peak, field) !== '') continue
+      ops.push({ op: 'set', path: ['models', route, field], value: fallback[field] })
+    }
+  }
   if (typedOffPeak) writeBand(offPeak, ['models', route, 'offPeak'])
   else if (stored?.offPeak !== undefined) ops.push({ op: 'unset', path: ['models', route, 'offPeak'] })
   return ops

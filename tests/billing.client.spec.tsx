@@ -19,13 +19,13 @@ import {
   makeTranslate, stubConfigForm, TestRemote, type StubConfigForm,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm, ConfigFormSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import { DEFAULT_CURRENCY, NS, type BillingSettings } from '../src/settings.ts'
 import { providerRoutes, type ProviderRouteGroup } from '../src/client/routes.ts'
-import { SessionCostMeter, currencyOf, freshness, groupSteps } from '../src/client/CostMeter.tsx'
+import { SessionCostMeter, freshness, groupSteps } from '../src/client/CostMeter.tsx'
 import { TurnCostMeter, TurnCostMeterTail, attemptsOf } from '../src/client/TurnCostMeter.tsx'
-import { BillingPage, type BillingPageProps } from '../src/client/BillingPage.tsx'
+import { BillingPage } from '../src/client/BillingPage.tsx'
 import type { BillingPageInjected, BillingPillsInjected } from '../src/client/face.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { rateOps } from '../src/client/rate-ops.ts'
@@ -62,7 +62,6 @@ function snapshot(partial: SnapshotParts = {}): ConfigFormSnapshot<BillingSettin
     user: undefined,
     revision: 1,
     writable: true,
-    mode: 'host',
     ...rest,
   }
 }
@@ -90,14 +89,7 @@ function billingFace(stub: StubConfigForm<BillingSettings>, ctx?: Context) {
       useSyncExternalStore(subscribeGroups, () => selector(groups.getSnapshot()))) as never,
     routeGroups: async () => {
       if (ctx === undefined) return
-      const describe = (ctx as unknown as {
-        configForms: {
-          describe(): {
-            ensure(): Promise<void>
-            getSnapshot(): { view?: { namespaces: readonly { ns: string; value: unknown; user?: unknown }[] } }
-          }
-        }
-      }).configForms.describe()
+      const describe = ctx.configForms.describe()
       const [registered, directory] = await Promise.all([
         ctx.remote.llm.listProviders(),
         ctx.remote.llm.listConfigurableProviders(),
@@ -130,18 +122,36 @@ function billingFace(stub: StubConfigForm<BillingSettings>, ctx?: Context) {
 function renderPage(
   stub: StubConfigForm<BillingSettings>,
   face: ReturnType<typeof billingFace>,
-): { mutate: ReturnType<typeof vi.fn> } {
-  const mutate = vi.fn(async () => true) as unknown as ReturnType<typeof vi.fn>
+): { mutate: ReturnType<typeof vi.fn<ConfigForm<Record<string, unknown>>['mutate']>> } {
+  const mutate = vi.fn<ConfigForm<Record<string, unknown>>['mutate']>(async () => true)
   function Harness() {
-    const state = useSyncExternalStore(
+    const stored = useSyncExternalStore(
       (notify: () => void) => stub.scope.subscribe(notify),
       () => stub.scope.getSnapshot(),
-    ) as unknown as ConfigFormSnapshot<Record<string, unknown>>
+    )
+    // The Plugins page runtime declares the entry form over the namespace
+    // generic, so the snapshot widens field by field instead of by assertion.
+    const state: ConfigFormSnapshot<Record<string, unknown>> = {
+      status: stored.status,
+      value: stored.value === undefined ? undefined : {
+        currency: stored.value.currency,
+        models: stored.value.models,
+        cache: stored.value.cache,
+        cacheError: stored.value.cacheError,
+        official: stored.value.official,
+        officialError: stored.value.officialError,
+        officialRequest: stored.value.officialRequest,
+      },
+      base: stored.base,
+      user: stored.user,
+      revision: stored.revision,
+      writable: stored.writable,
+    }
     return (
       <BillingPage
         {...seats()}
         view="page"
-        form={{ state, mutate: mutate as unknown as NonNullable<BillingPageProps['form']>['mutate'] }}
+        form={{ state, mutate }}
         useBillingGroups={face.useBillingGroups}
         routeGroups={face.routeGroups}
         t={t}
@@ -177,6 +187,10 @@ function seats() {
     close: (() => {}) as never,
     useSessionStatus: (() => undefined) as never,
     useSessionRetainInfo: (() => undefined) as never,
+    useAccess: (() => undefined) as never,
+    useRemoteAccess: (() => undefined) as never,
+    useSessionAccess: (() => undefined) as never,
+    useWorkspaceAccess: (() => undefined) as never,
   }
 }
 
@@ -189,13 +203,6 @@ const FLASH_RATES = { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 }
 
 /** A moment inside the published peak window, so a windowed row is deterministic. */
 const AT = Date.UTC(2024, 0, 1, 1, 0)
-
-describe('currency selection', () => {
-  it('uses the account currency, then the configured one', () => {
-    expect(currencyOf({ total: 1, currency: 'USD', available: true, at: 0 }, 'CNY')).toBe('USD')
-    expect(currencyOf(null, 'EUR')).toBe('EUR')
-  })
-})
 
 describe('session cost pill', () => {
   it('renders nothing before any usage or balance exists', () => {
@@ -236,6 +243,35 @@ describe('session cost pill', () => {
     expect(screen.getByLabelText('¥18.00 this session')).toBeDefined()
     expect(screen.getByLabelText('DeepSeek account balance ¥12.75')).toBeDefined()
     expect(screen.getByLabelText('DeepSeek account balance ¥12.75').textContent).toContain('12.75')
+  })
+
+  it('labels a cost in the currency its rates are stated in, not the account\'s', () => {
+    const stub = stubConfigForm<BillingSettings>()
+    stub.publish(snapshot({
+      value: {
+        currency: 'CNY',
+        models: { 'bai/glm-5.3-flash': FLASH_RATES },
+        cache: { total: 1.5, currency: 'USD', available: true, at: Date.now() },
+        cacheError: null,
+      },
+    }))
+    const usage: TokenUsageProjection = {
+      uncachedInputTokens: 0, outputTokens: 1_000_000, cacheReadTokens: 0, cacheWriteTokens: 0,
+    }
+    render(
+      <SessionCostMeter {...seats()}
+        useProjection={projection({
+          tokenUsage: usage,
+          modelSelection: { lastUsed: { provider: 'bai', model: 'glm-5.3-flash' }, next: null },
+        }) as never}
+        {...billingFace(stub)}
+        t={t} />,
+    )
+    // The stored rates are CNY figures, so the cost is a CNY amount even though
+    // the account reports dollars; the balance keeps the currency it was read
+    // in. Formatting a CNY figure with the account's symbol would misstate it.
+    expect(screen.getByText('¥13.50')).toBeDefined()
+    expect(screen.getByLabelText('DeepSeek account balance $1.50')).toBeDefined()
   })
 
   it('reprices when a rate is edited', async () => {
@@ -529,7 +565,7 @@ describe('reactive namespace read', () => {
 })
 
 describe('turn cost row', () => {
-  const nodes = [
+  const nodes: readonly ChatConversationViewNode[] = [
     {
       key: 'turn-tail', kind: 'turn-tail', target: 'chat', anchorSeq: 3, location: { kind: 'session' },
       visibility: 'visible', id: 'turn-tail',
@@ -603,7 +639,7 @@ describe('turn cost row', () => {
         },
       },
     },
-  ] as unknown as readonly ChatConversationViewNode[]
+  ]
 
   function useChat<T>(select: (snapshot: { nodes: { values(): readonly ChatConversationViewNode[] } }) => T): T {
     return select({ nodes: { values: () => nodes } })
@@ -614,7 +650,7 @@ describe('turn cost row', () => {
     return {
       key: id, kind, target: 'chat', anchorSeq: 1, location: { kind: 'session' },
       visibility: 'visible', id, data,
-    } as unknown as ChatConversationViewNode
+    }
   }
 
   /** A Chat selector over one node list. */
@@ -777,7 +813,7 @@ describe('turn cost row', () => {
         cacheError: null,
       },
     }))
-    const unattributed = [
+    const unattributed: readonly ChatConversationViewNode[] = [
       {
         key: 'turn-tail', kind: 'turn-tail', target: 'chat', anchorSeq: 3, location: { kind: 'session' },
         visibility: 'visible', id: 'turn-tail',
@@ -790,7 +826,7 @@ describe('turn cost row', () => {
           },
         },
       },
-    ] as unknown as readonly ChatConversationViewNode[]
+    ]
     const nodes = (select: (snapshot: { nodes: { values(): readonly ChatConversationViewNode[] } }) => unknown) =>
       select({ nodes: { values: () => unattributed } })
     render(
@@ -1145,11 +1181,16 @@ describe('settings page', () => {
     fireEvent.click(screen.getByText('Save'))
     await act(async () => { await Promise.resolve() })
     // The page hands the entry's form the operation the row describes: the
-    // typed off-peak figure at its own path, and nothing for the fields the
-    // user left alone.
+    // typed off-peak figure at its own path, plus the published peak figures
+    // those fields were displaying, so the stored row carries what the row
+    // showed instead of resolving the untouched band into zeroes.
     expect(mutate).toHaveBeenCalledWith(
-      [{ op: 'set', path: ['models', 'deepseek-official/deepseek-v4-flash', 'offPeak', 'cacheHit'], value: 0.03 }],
-      1,
+      [
+        { op: 'set', path: ['models', 'deepseek-official/deepseek-v4-flash', 'cacheHit'], value: 0.04 },
+        { op: 'set', path: ['models', 'deepseek-official/deepseek-v4-flash', 'cacheMiss'], value: 2 },
+        { op: 'set', path: ['models', 'deepseek-official/deepseek-v4-flash', 'output'], value: 8 },
+        { op: 'set', path: ['models', 'deepseek-official/deepseek-v4-flash', 'offPeak', 'cacheHit'], value: 0.03 },
+      ],
     )
   })
 
@@ -1217,7 +1258,29 @@ describe('settings page', () => {
         { op: 'set', path: ['models', 'bai/glm-5.3-flash', 'cacheMiss'], value: 4.5 },
         { op: 'set', path: ['models', 'bai/glm-5.3-flash', 'output'], value: 13.5 },
       ],
-      1,
+    )
+  })
+
+  it('writes without fencing at the revision the page rendered at', async () => {
+    const stub = stubConfigForm<BillingSettings>()
+    stub.publish(snapshot())
+    const face = billingFace(stub, contextDouble(remoteDouble(), baiDirectory()))
+    const { mutate } = renderPage(stub, face)
+    await screen.findByText('BAI')
+    fireEvent.click(screen.getByLabelText('Edit rates for bai'))
+    fireEvent.change(screen.getByLabelText('bai/glm-5.3-flash Cache hit'), { target: { value: '0.15' } })
+
+    // The Host commits these same settings on its own schedule: the balance and
+    // price chains both write through `ctx.settings.update`, which moves the
+    // entry's revision between the render that staged the draft and the click
+    // that saves it. The page fences at no revision of its own, so the write
+    // this save makes is the one the form's own latest revision accepts.
+    await act(async () => { stub.publish(snapshot({ revision: 2 })) })
+    fireEvent.click(screen.getAllByText('Save')[0] as HTMLElement)
+    await act(async () => { await Promise.resolve() })
+
+    expect(mutate).toHaveBeenCalledWith(
+      [{ op: 'set', path: ['models', 'bai/glm-5.3-flash', 'cacheHit'], value: 0.15 }],
     )
   })
 
@@ -1239,7 +1302,7 @@ describe('settings page', () => {
     fireEvent.click(screen.getByText('Clear'))
     fireEvent.click(screen.getByText('Save'))
     await act(async () => { await Promise.resolve() })
-    expect(mutate).toHaveBeenCalledWith([{ op: 'unset', path: ['models', 'bai/glm-5.3-flash'] }], 1)
+    expect(mutate).toHaveBeenCalledWith([{ op: 'unset', path: ['models', 'bai/glm-5.3-flash'] }])
 
     // A save the Host refuses says so and keeps the drafts, so the user can try again.
     mutate.mockResolvedValueOnce(false)
@@ -1549,7 +1612,7 @@ describe('settings page', () => {
     fireEvent.click(screen.getAllByText('Clear')[1] as HTMLElement)
     fireEvent.click(screen.getByText('Save'))
     await act(async () => { await Promise.resolve() })
-    const [ops] = mutate.mock.calls.at(-1) as [{ op: string; path: readonly string[] }[]]
+    const [ops = []] = mutate.mock.calls.at(-1) ?? []
     expect(ops).toHaveLength(2)
     for (const op of ops) {
       expect(op.op).toBe('unset')
@@ -2014,7 +2077,7 @@ describe('plugin registration', () => {
 
 describe('rate write operations', () => {
   it('writes the peak band alone when no second band was typed', () => {
-    expect(rateOps('a/b', { cacheHit: '0.15', cacheMiss: '4.5', output: '13.5' }, {}, undefined)).toEqual([
+    expect(rateOps('a/b', { cacheHit: '0.15', cacheMiss: '4.5', output: '13.5' }, {}, undefined, undefined)).toEqual([
       { op: 'set', path: ['models', 'a/b', 'cacheHit'], value: 0.15 },
       { op: 'set', path: ['models', 'a/b', 'cacheMiss'], value: 4.5 },
       { op: 'set', path: ['models', 'a/b', 'output'], value: 13.5 },
@@ -2029,6 +2092,7 @@ describe('rate write operations', () => {
       { cacheHit: '0.15', cacheMiss: '4.5', output: '13.5' },
       { cacheHit: '0.075', output: '6.75' },
       undefined,
+      undefined,
     )).toEqual([
       { op: 'set', path: ['models', 'a/b', 'cacheHit'], value: 0.15 },
       { op: 'set', path: ['models', 'a/b', 'cacheMiss'], value: 4.5 },
@@ -2038,12 +2102,53 @@ describe('rate write operations', () => {
     ])
   })
 
+  it('completes a new row from the figures it displayed', () => {
+    // The peak fields showed the published price, so they are stored with the
+    // band the user typed: leaving them out would resolve the peak band into
+    // zeroes and bill every peak hour at nothing.
+    expect(rateOps(
+      'a/b',
+      {},
+      { cacheHit: '0.075', output: '6.75' },
+      undefined,
+      { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5, offPeak: { cacheHit: 0.075, cacheMiss: 2.25, output: 6.75 } },
+    )).toEqual([
+      { op: 'set', path: ['models', 'a/b', 'cacheHit'], value: 0.15 },
+      { op: 'set', path: ['models', 'a/b', 'cacheMiss'], value: 4.5 },
+      { op: 'set', path: ['models', 'a/b', 'output'], value: 13.5 },
+      { op: 'set', path: ['models', 'a/b', 'offPeak', 'cacheHit'], value: 0.075 },
+      { op: 'set', path: ['models', 'a/b', 'offPeak', 'output'], value: 6.75 },
+    ])
+    // A figure the user typed wins over the one the field displayed, including a
+    // typed zero: only the fields left untouched take the fallback.
+    expect(rateOps(
+      'a/b',
+      { cacheMiss: '0' },
+      {},
+      undefined,
+      { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 },
+    )).toEqual([
+      { op: 'set', path: ['models', 'a/b', 'cacheMiss'], value: 0 },
+      { op: 'set', path: ['models', 'a/b', 'cacheHit'], value: 0.15 },
+      { op: 'set', path: ['models', 'a/b', 'output'], value: 13.5 },
+    ])
+  })
+
+  it('writes only the typed figures where the row displayed no fallback', () => {
+    // A hand-typed route with no published price shows empty fields, so there is
+    // no figure to store for the ones left empty.
+    expect(rateOps('a/b', {}, { cacheHit: '0.075' }, undefined, undefined)).toEqual([
+      { op: 'set', path: ['models', 'a/b', 'offPeak', 'cacheHit'], value: 0.075 },
+    ])
+  })
+
   it('clears the stored second band when every off-peak field is emptied', () => {
     expect(rateOps(
       'a/b',
       { cacheHit: '0.15', cacheMiss: '4.5', output: '13.5' },
       {},
       { cacheHit: 1, cacheMiss: 2, output: 3, offPeak: { cacheHit: 0.5, cacheMiss: 1, output: 1.5 } },
+      undefined,
     )).toEqual([
       { op: 'set', path: ['models', 'a/b', 'cacheHit'], value: 0.15 },
       { op: 'set', path: ['models', 'a/b', 'cacheMiss'], value: 4.5 },
@@ -2054,24 +2159,24 @@ describe('rate write operations', () => {
 
   it('leaves a field the user never touched alone', () => {
     // Only typed figures are written: blanking a field is not a way to store a
-    // zero, and opening a row and saving it unchanged writes what it showed.
-    expect(rateOps('a/b', { cacheHit: '0.15' }, {}, { cacheHit: 1, cacheMiss: 2, output: 3 }))
+    // zero, and opening a stored row and saving it unchanged writes what it held.
+    expect(rateOps('a/b', { cacheHit: '0.15' }, {}, { cacheHit: 1, cacheMiss: 2, output: 3 }, undefined))
       .toEqual([{ op: 'set', path: ['models', 'a/b', 'cacheHit'], value: 0.15 }])
-    expect(rateOps('a/b', { cacheHit: '0' }, {}, undefined))
+    expect(rateOps('a/b', { cacheHit: '0' }, {}, undefined, undefined))
       .toEqual([{ op: 'set', path: ['models', 'a/b', 'cacheHit'], value: 0 }])
   })
 
   it('reads an emptied row as its removal rather than a row of zeroes', () => {
-    expect(rateOps('a/b', {}, {}, undefined)).toEqual([{ op: 'unset', path: ['models', 'a/b'] }])
-    expect(rateOps('a/b', {}, {}, { cacheHit: 1, cacheMiss: 2, output: 3 }))
+    expect(rateOps('a/b', {}, {}, undefined, undefined)).toEqual([{ op: 'unset', path: ['models', 'a/b'] }])
+    expect(rateOps('a/b', {}, {}, { cacheHit: 1, cacheMiss: 2, output: 3 }, undefined))
       .toEqual([{ op: 'unset', path: ['models', 'a/b'] }])
   })
 
   it('writes nothing at all for text that does not parse', () => {
     // A mistyped figure must not change the document, and in particular must
     // not delete the stored row behind it.
-    expect(rateOps('a/b', { cacheHit: 'four' }, {}, { cacheHit: 1, cacheMiss: 2, output: 3 })).toEqual([])
-    expect(rateOps('a/b', { cacheHit: 'four', cacheMiss: '4.5', output: '13.5' }, {}, undefined))
+    expect(rateOps('a/b', { cacheHit: 'four' }, {}, { cacheHit: 1, cacheMiss: 2, output: 3 }, undefined)).toEqual([])
+    expect(rateOps('a/b', { cacheHit: 'four', cacheMiss: '4.5', output: '13.5' }, {}, undefined, undefined))
       .toEqual([
         { op: 'set', path: ['models', 'a/b', 'cacheMiss'], value: 4.5 },
         { op: 'set', path: ['models', 'a/b', 'output'], value: 13.5 },
@@ -2079,11 +2184,11 @@ describe('rate write operations', () => {
   })
 
   it('trims the typed text before reading it', () => {
-    expect(rateOps('a/b', { cacheHit: ' 0.15 ' }, {}, undefined))
+    expect(rateOps('a/b', { cacheHit: ' 0.15 ' }, {}, undefined, undefined))
       .toEqual([{ op: 'set', path: ['models', 'a/b', 'cacheHit'], value: 0.15 }])
     // Whitespace alone is an empty field, so a form holding only spaces is the
     // same request as one holding nothing.
-    expect(rateOps('a/b', { cacheHit: '   ' }, {}, undefined)).toEqual([{ op: 'unset', path: ['models', 'a/b'] }])
+    expect(rateOps('a/b', { cacheHit: '   ' }, {}, undefined, undefined)).toEqual([{ op: 'unset', path: ['models', 'a/b'] }])
   })
 })
 

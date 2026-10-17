@@ -34,8 +34,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only: pulls the chat contract the per-Turn pill is seated on
 // ('conversation.chat.turnTail' and its owner share).
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
-// Type-only: pulls the Plugins page's SlotMap merge (the 'plugins.row.config'
-// entry this package's own configuration page registers into).
+// Type-only: pulls the Plugins page's SlotMap merge (the 'plugins.item' entry
+// this package's own configuration page registers into).
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { NS, type BillingSettings } from '../settings.ts'

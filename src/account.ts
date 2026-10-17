@@ -88,7 +88,16 @@ export async function readBalance(
   request: BalanceReadRequest,
   resolveKey: ApiKeyResolver,
 ): Promise<BalanceRead> {
-  const apiKey = await resolveKey()
+  let apiKey: string | undefined
+  try {
+    apiKey = await resolveKey()
+  } catch {
+    // The credential seam reads a name outside its grammar as not set rather
+    // than throwing, so a throw here means the same thing to this read: no
+    // usable key. Answering with the structured reason keeps the contract that
+    // a read settles with a snapshot or a reason, and never rejects.
+    return { ok: false, failure: { kind: 'noKey', ref: request.apiKeyEnv } }
+  }
   if (apiKey === undefined || apiKey.length === 0) {
     return { ok: false, failure: { kind: 'noKey', ref: request.apiKeyEnv } }
   }

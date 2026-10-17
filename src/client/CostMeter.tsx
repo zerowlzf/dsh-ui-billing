@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom'
 import type { ModelSelectionProjection } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { BalanceSnapshot, PriceWindow } from '../settings.ts'
+import type { PriceWindow } from '../settings.ts'
 import { DEFAULT_CURRENCY, pricesByWindow, routeKey } from '../settings.ts'
 import type { BillingPillsInjected } from './face.ts'
 import { effectiveRates } from './official-rates.ts'
@@ -38,17 +38,6 @@ export type SessionCostMeterProps =
   & PropsRuntime<'conversation.composer.dock'>
   & InjectFace<BillingPillsInjected>
   & PropsLocale<typeof LOCALE_NS>
-
-/**
- * Currency a cost is displayed in: the account's, since that is what the spend
- * is compared against, or the configured fallback while no balance is known.
- * @param balance - the newest Host-read balance, or null.
- * @param fallback - currency code the deployment prices in before any read.
- * @returns the currency code to format amounts with.
- */
-export function currencyOf(balance: BalanceSnapshot | null, fallback: string): string {
-  return balance?.currency ?? fallback
-}
 
 /** The route the running total is currently growing under. */
 export function activeRoute(selection: ModelSelectionProjection | undefined): string {
@@ -109,7 +98,10 @@ export function SessionCostMeter({ useProjection, useBilling, t }: SessionCostMe
     [accumulated.steps, rates],
   )
   const priced = accumulated.steps.some(step => rates[step.route] !== undefined)
-  const currency = currencyOf(balance, settings?.currency ?? DEFAULT_CURRENCY)
+  // A cost is labelled in the currency its rates are stated in, which is the
+  // configured one; the balance figure keeps the currency the account reported,
+  // because those are two different facts when the two disagree.
+  const currency = settings?.currency ?? DEFAULT_CURRENCY
   // Both dialog seats mount unconditionally: the row renders nothing without
   // data, and a conditional hook call would change the hook order instead.
   const costSeat = useStatDialog()

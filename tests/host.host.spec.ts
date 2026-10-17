@@ -305,7 +305,7 @@ describe('configuration', () => {
     // The empty object is what a deployment that sets nothing resolves from;
     // the schema fills every key, which is the fact under test. Ordinary keys
     // resolve to plain values and live ones to a reference read on demand.
-    const resolved = configSchema({}) as unknown as PluginConfig
+    const resolved = configSchema({})
     expect({
       apiKeyEnv: resolved.apiKeyEnv,
       baseURL: resolved.baseURL,
@@ -587,6 +587,17 @@ describe('readBalance', () => {
     vi.stubGlobal('fetch', fetchImpl)
     const result = await readBalance(request, fromEnv)
     expect(result.ok).toBe(false)
+    expect(result.ok ? undefined : result.failure).toEqual({ kind: 'noKey', ref: 'BILLING_TEST_KEY' })
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('answers a resolver that refuses instead of rejecting the read', async () => {
+    const fetchImpl = vi.fn()
+    vi.stubGlobal('fetch', fetchImpl)
+    // The credentials seam documents that tolerating a throw is the consumer's
+    // job, and a read settles with a snapshot or a reason either way: the timer
+    // that calls this one is the only path that ever reads a balance again.
+    const result = await readBalance(request, () => Promise.reject(new Error('unreadable store')))
     expect(result.ok ? undefined : result.failure).toEqual({ kind: 'noKey', ref: 'BILLING_TEST_KEY' })
     expect(fetchImpl).not.toHaveBeenCalled()
   })

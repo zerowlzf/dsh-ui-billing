@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-billing",
   "description": "Per-model token rates, DeepSeek account balance, and session and turn cost displays for Web",
-  "version": "0.2.0-rc.1",
+  "version": "0.2.1-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -78,8 +78,6 @@
     "@deepseek-ai/dsh-token-meter": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-web": "workspace:*",
-    "@types/react": "~18.3.1",
-    "@types/react-dom": "~18.3.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

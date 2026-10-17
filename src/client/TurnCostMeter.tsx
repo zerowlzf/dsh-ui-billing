@@ -22,7 +22,6 @@ import { effectiveRates } from './official-rates.ts'
 import { turnCost, turnRouteUsage, turnRoutes, type TurnAttempt, type TurnRouteUsage } from './cost.ts'
 import { formatAmount, windowKey } from './format.ts'
 import { IconCoinOutline16 } from './icons.tsx'
-import { currencyOf } from './CostMeter.tsx'
 import { MEASURE_STYLE, useStatDialog } from './stat-dialog.ts'
 import css from './TurnCostMeter.module.css'
 import dialogCss from './stat-dialog.module.css'
@@ -179,7 +178,7 @@ function TurnCostReading({ turn: location, useChat, useBilling, t, tailSeat }: T
   // the only reason for a priced row to be absent, so the routes are read only
   // then.
   const named = rows.length === 0 ? turnRoutes(usage) : []
-  const currency = currencyOf(settings?.cache ?? null, settings?.currency ?? DEFAULT_CURRENCY)
+  const currency = settings?.currency ?? DEFAULT_CURRENCY
   const priced = cost.priced.length > 0
   const label = priced
     ? t('turn.cost', { amount: formatAmount(cost.total, currency) })
