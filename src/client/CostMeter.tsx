@@ -12,7 +12,7 @@
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { ModelSelectionProjection } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ModelSelectionProjection } from '@deepseek-ai/dsh-agent/types'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PriceWindow } from '../settings.ts'

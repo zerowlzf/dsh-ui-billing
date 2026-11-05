@@ -86,6 +86,7 @@ function seats() {
     useRemoteAccess: (() => undefined) as never,
     useSessionAccess: (() => undefined) as never,
     useWorkspaceAccess: (() => undefined) as never,
+    useContextMenu: (() => undefined) as never,
   }
 }
 
