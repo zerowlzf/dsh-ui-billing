@@ -55,10 +55,18 @@
   flex: none;
 }
 
-.pill:hover,
 .pill[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
+}
+
+/* Hover only where a hovering primary input exists; the expanded seat above is
+   a state, not a hover, so it stays outside the query. */
+@media (hover: hover) {
+  .pill:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
 }
 
 .label {
